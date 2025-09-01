@@ -183,6 +183,23 @@
         <button id="applyAudioBtn" class="scopeBtn">Change</button>
       </div>
     </div>
+    
+    <!-- Theme Selection -->
+    <div class="row" style="margin-top:8px;gap:12px">
+      <div class="scopeWrap">
+        <span style="opacity:.9">Theme:</span>
+        <select id="themeSelect" class="scopeSelect">
+          <option value="default">Dark Ocean</option>
+          <option value="beach">Beach Sunset</option>
+          <option value="jungle">Jungle Canopy</option>
+          <option value="sky">Cloud Nine</option>
+          <option value="desert">Desert Oasis</option>
+          <option value="neon">Neon Nights</option>
+          <option value="forest">Mystic Forest</option>
+        </select>
+        <button id="applyThemeBtn" class="scopeBtn">Change</button>
+      </div>
+    </div>
 
     <!-- Progress -->
     <div class="card" id="progressCard">
@@ -299,6 +316,7 @@
       <h3>🐤 Flappy Break</h3>
       <canvas id="flappyCanvas" width="320" height="480"></canvas>
       <div style="margin-top:8px">
+        <button id="flappySoundToggle" style="display:none;margin-right:8px">🔊 Sound On</button>
         <button id="flappyClose">Close</button>
       </div>
       <p id="flappyScore">Score: 0 • Best: 0</p>
@@ -325,6 +343,94 @@
 const AUDIO_PIANO='./audio';
 const AUDIO_GUITAR='./Guitar';
 const AUDIO_TYPES = {PIANO: 'piano', SINE: 'sine', GUITAR: 'guitar'};
+
+// Theme definitions
+const THEMES = {
+  default: {
+    name: 'Dark Ocean',
+    bg: '#0f172a',
+    card: '#1e293b', 
+    muted: '#334155',
+    muted2: '#2a3a54',
+    text: '#e5e7eb',
+    good: '#16a34a',
+    bad: '#dc2626',
+    accent: '#fbbf24',
+    neutral: '#94a3b8'
+  },
+  beach: {
+    name: 'Beach Sunset',
+    bg: '#0f2027',
+    card: '#2c5aa0',
+    muted: '#44749d',
+    muted2: '#5a86ba',
+    text: '#fff8dc',
+    good: '#ff7f50',
+    bad: '#dc143c',
+    accent: '#ffa500',
+    neutral: '#87ceeb'
+  },
+  jungle: {
+    name: 'Jungle Canopy', 
+    bg: '#1a2f1a',
+    card: '#2d4a2d',
+    muted: '#456545',
+    muted2: '#3a5a3a',
+    text: '#e8f5e8',
+    good: '#32cd32',
+    bad: '#cd5c5c',
+    accent: '#adff2f',
+    neutral: '#9acd32'
+  },
+  sky: {
+    name: 'Cloud Nine',
+    bg: '#e6f2ff',
+    card: '#ffffff',
+    muted: '#b8d4f0',
+    muted2: '#a3c9ea',
+    text: '#1e3a8a',
+    good: '#10b981',
+    bad: '#ef4444',
+    accent: '#3b82f6',
+    neutral: '#6b7280'
+  },
+  desert: {
+    name: 'Desert Oasis',
+    bg: '#2d1810',
+    card: '#8b4513',
+    muted: '#cd853f',
+    muted2: '#a0522d',
+    text: '#faebd7',
+    good: '#daa520',
+    bad: '#b22222',
+    accent: '#ff8c00',
+    neutral: '#d2b48c'
+  },
+  neon: {
+    name: 'Neon Nights',
+    bg: '#0a0a0f',
+    card: '#1a1a2e',
+    muted: '#16213e',
+    muted2: '#0f172a',
+    text: '#00ffff',
+    good: '#00ff00',
+    bad: '#ff1493',
+    accent: '#ff00ff',
+    neutral: '#9370db'
+  },
+  forest: {
+    name: 'Mystic Forest',
+    bg: '#0d1421',
+    card: '#1e3a3a',
+    muted: '#2f5a5a',
+    muted2: '#1a3030',
+    text: '#f0fff0',
+    good: '#228b22',
+    bad: '#dc143c',
+    accent: '#ffd700',
+    neutral: '#8fbc8f'
+  }
+};
 const PC=["C","Db","D","Eb","E","F","Gb","G","Ab","A","Bb","B"];
 const PC_LABEL={ C:"C", Db:"C#/Db", D:"D", Eb:"D#/Eb", E:"E", F:"F", Gb:"F#/Gb", G:"G", Ab:"G#/Ab", A:"A", Bb:"A#/Bb", B:"B" };
 const UNLOCK_ORDER = ["F","E","Gb","Eb","G","D","Ab","Db","A","C","Bb","B"];
@@ -339,6 +445,22 @@ const SESS_DAILY_MS=20*60*1000;
 const WEEKLY_TARGET_MS=2*3600*1000;
 const LOCKOUT_MS=23*3600*1000;
 const LATENCY_CUSHION_MS=100;
+
+/* ------------------ THEME SYSTEM ------------------ */
+function applyTheme(themeName) {
+  const theme = THEMES[themeName] || THEMES.default;
+  const root = document.documentElement;
+  
+  root.style.setProperty('--bg', theme.bg);
+  root.style.setProperty('--card', theme.card);
+  root.style.setProperty('--muted', theme.muted);
+  root.style.setProperty('--muted2', theme.muted2);
+  root.style.setProperty('--text', theme.text);
+  root.style.setProperty('--good', theme.good);
+  root.style.setProperty('--bad', theme.bad);
+  root.style.setProperty('--accent', theme.accent);
+  root.style.setProperty('--neutral', theme.neutral);
+}
 
 /* ------------------ SAFE HELPERS + STATE ------------------ */
 function byId(id){ return document.getElementById(id); }
@@ -364,7 +486,9 @@ try{
     levelFailCounts:{},
     specialRanForLevel:null,
     audioType: AUDIO_TYPES.PIANO,
-    assessmentScores: []
+    assessmentScores: [],
+    theme: 'default',
+    flappySoundEnabled: true
   };
 } catch(e){
   state = { userName:null, levelIndex:1, levelTrials:0, levelCorrect:0, shepardDoneFor:-1, sessions:[], trials:[], startDate:null, lockoutUntil:null, capResetAt:null, testFailStreak:0, suggestShownSet:null, lastSeen:null, flappyHighScore:0, thisWeekIdx:0, thisWeekMs:0, levelFailCounts:{}, specialRanForLevel:null, audioType: AUDIO_TYPES.PIANO };
@@ -379,6 +503,19 @@ if (!state.assessmentScores) {
   state.assessmentScores = [];
   save();
 }
+// Migration for theme
+if (!state.theme) {
+  state.theme = 'default';
+  save();
+}
+// Migration for flappySoundEnabled
+if (state.flappySoundEnabled === undefined) {
+  state.flappySoundEnabled = true;
+  save();
+}
+
+// Apply theme on load
+applyTheme(state.theme);
 function save(){ try{ localStorage.setItem('apTrainer', JSON.stringify(state)); }catch(e){ report(e); } }
 window.state = state;
 
@@ -589,6 +726,40 @@ async function playSample(note){
       osc.connect(g).connect(ctx.destination); osc.start(t0); osc.stop(t0+0.3);
     }catch(_){}
   }
+}
+
+/* Wooden metronome sound for Flappy Bird lockout */
+async function playMetronomeClick(){
+  try{
+    await resumeCtx();
+    const ctx = getCtx();
+    
+    // Create a short, sharp click sound resembling wooden metronome
+    const noise = ctx.createBufferSource();
+    const buffer = ctx.createBuffer(1, ctx.sampleRate * 0.1, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    
+    // Generate a sharp click with quick decay
+    for (let i = 0; i < data.length; i++) {
+      const decay = Math.pow(i / data.length, 3);
+      data[i] = (Math.random() * 2 - 1) * (1 - decay) * 0.1;
+    }
+    
+    noise.buffer = buffer;
+    const g = ctx.createGain();
+    g.gain.value = 0.15;
+    
+    // Add some filtering to make it sound more "woody"
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 1200;
+    filter.Q.value = 4;
+    
+    noise.connect(filter).connect(g).connect(ctx.destination);
+    const t = ctx.currentTime;
+    noise.start(t);
+    noise.stop(t + 0.1);
+  }catch(_e){}
 }
 
 /* ------------------ Shepard (pauses) ------------------ */
@@ -1346,6 +1517,19 @@ function wireOnce(){
     alert(`Audio changed to ${labels[newType] || 'Piano'}`);
   });
 
+  // Theme selection
+  safe('themeSelect', el=> {
+    el.value = state.theme || 'default';
+  });
+  safe('applyThemeBtn', el=> el.onclick=()=>{
+    const newTheme = byId('themeSelect')?.value || 'default';
+    state.theme = newTheme;
+    save();
+    applyTheme(newTheme);
+    const themeName = THEMES[newTheme]?.name || 'Dark Ocean';
+    alert(`Theme changed to ${themeName}`);
+  });
+
   // Trainer controls
   safe('btnPlay',        el=> el.onclick=async()=>{ firstRtBonusMs=2000; await resumeCtx(); if(paused){ pauseEnd(); } safe('btnPause', b=> b.textContent='⏸ Pause'); if(special) nextSpecialTrial(); else nextTrial(true); });
   safe('btnPause',       el=> el.onclick=()=> pauseResume());
@@ -1384,7 +1568,32 @@ let fCtx, flappyRAF=null, running=false, score=0, pipes=[], bird, pipeTimer=0, l
 const FLAPPY = { gravity:900, flap:-380, baseSpeed:140, maxSpeed:260, speed:140, baseGap:140, gap:140, introPipes:5, introExtra:60, spawnEvery:1.20, width:52 };
 
 function openFlappyFromMenu(){ if(isLocked()) openFlappyModal(); else alert('Flappy is intended for lockout/rewards.'); }
-function openFlappyModal(){ byId('flappyModal').style.display='flex'; const c=byId('flappyCanvas'); if(!c) return; fCtx=c.getContext('2d'); resetFlappy(); attachFlappyControls(); }
+function openFlappyModal(){ 
+  byId('flappyModal').style.display='flex'; 
+  const c=byId('flappyCanvas'); 
+  if(!c) return; 
+  fCtx=c.getContext('2d'); 
+  resetFlappy(); 
+  attachFlappyControls();
+  
+  // Show sound toggle button and update description when in lockout
+  const soundToggle = byId('flappySoundToggle');
+  const description = byId('flappyModal').querySelector('p:last-child');
+  if (isLocked()) {
+    if (soundToggle) {
+      soundToggle.style.display = 'inline-block';
+      soundToggle.textContent = state.flappySoundEnabled ? '🔊 Sound On' : '🔇 Sound Off';
+    }
+    if (description) {
+      description.textContent = 'Tap/click (or Space) to flap. First tap starts — each flap makes a metronome click.';
+    }
+  } else {
+    if (soundToggle) soundToggle.style.display = 'none';
+    if (description) {
+      description.textContent = 'Tap/click (or Space) to flap. First tap starts — each flap plays a random pitch.';
+    }
+  }
+}
 function startFlappyReward(){ if(sessionActive && !paused){ pauseStart('flappy'); } clearTimeout(rtTimer); rtTimer=null; clearTimeout(autoTimer); autoTimer=null; openFlappyModal(); }
 function closeFlappy(){
   running=false; cancelAnimationFrame(flappyRAF); byId('flappyModal').style.display='none'; detachFlappyControls();
@@ -1396,7 +1605,19 @@ function closeFlappy(){
   }
 }
 function resetFlappy(){ const cnv=byId('flappyCanvas'); if(!cnv) return; bird={x:60,y:cnv.height/2,vy:0,wing:0}; pipes=[]; score=0; pipeTimer=0; lastTs=null; FLAPPY.speed=FLAPPY.baseSpeed; FLAPPY.gap=FLAPPY.baseGap + FLAPPY.introExtra; FLAPPY.introPipes=5; text('flappyScore',`Score: 0 • Best: ${state.flappyHighScore||0}`); }
-function flap(){ bird.vy = FLAPPY.flap; const pc = rand(PC); const note = `${pc}${rand(currentOctaves())}`; playSample(note); }
+function flap(){ 
+  bird.vy = FLAPPY.flap; 
+  
+  // Only play sound if enabled and use metronome sound for lockout
+  if (state.flappySoundEnabled && isLocked()) {
+    playMetronomeClick();
+  } else if (state.flappySoundEnabled && !isLocked()) {
+    // Regular flappy bird with musical pitches
+    const pc = rand(PC); 
+    const note = `${pc}${rand(currentOctaves())}`; 
+    playSample(note);
+  }
+}
 function progressiveDifficulty(){ // only speed scales; gap remains constant after intro
   const target = FLAPPY.baseSpeed + Math.min(Math.floor(score/5)*18, FLAPPY.maxSpeed - FLAPPY.baseSpeed);
   FLAPPY.speed = target;
@@ -1457,6 +1678,11 @@ function attachFlappyControls(){
   cnv.addEventListener('touchstart', onTouchStart, { passive:false });
   window.addEventListener('keydown', onKey);
   safe('flappyClose', el=> el.onclick=onClose);
+  safe('flappySoundToggle', el=> el.onclick=()=> {
+    state.flappySoundEnabled = !state.flappySoundEnabled;
+    save();
+    el.textContent = state.flappySoundEnabled ? '🔊 Sound On' : '🔇 Sound Off';
+  });
   _flHandlers={onCanvasClick,onTouchStart,onKey,onClose};
 }
 function detachFlappyControls(){
@@ -1465,6 +1691,7 @@ function detachFlappyControls(){
   cnv.removeEventListener('touchstart', _flHandlers.onTouchStart);
   window.removeEventListener('keydown', _flHandlers.onKey);
   safe('flappyClose', el=> el.onclick=null);
+  safe('flappySoundToggle', el=> el.onclick=null);
 }
 
 /* ------------------ STRICT MODAL + NAV GUARDS ------------------ */
