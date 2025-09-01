@@ -114,8 +114,7 @@
         <div class="tPage" id="tPage3">
           <h3>🎹 Octaves (per study)</h3>
           <ul>
-            <li>Training tones span <strong>three octaves</strong> and are randomized within blocks.</li>
-            <li><strong>Piano/Sine:</strong> C4–B6 • <strong>Guitar:</strong> C3–B5</li>
+            <li>Training tones span <strong>three octaves (C4–B6)</strong> and are randomized within blocks.</li>
             <li>This encourages learning the <em>chroma</em> (pitch class), not just pitch height.</li>
             <li>Tone length: <strong>800 ms</strong>.</li>
           </ul>
@@ -167,19 +166,6 @@
         <span style="opacity:.9">Current scope:</span>
         <select id="setSizeSelect" class="scopeSelect"></select>
         <button id="applySetBtn" class="scopeBtn">Change…</button>
-      </div>
-    </div>
-    
-    <!-- Audio Selection -->
-    <div class="row" style="margin-top:8px;gap:12px">
-      <div class="scopeWrap">
-        <span style="opacity:.9">Audio type:</span>
-        <select id="audioTypeSelect" class="scopeSelect">
-          <option value="piano">Piano (C4-B6)</option>
-          <option value="sine">Sine Wave (C4-B6)</option>
-          <option value="guitar">Guitar (C3-B5)</option>
-        </select>
-        <button id="applyAudioBtn" class="scopeBtn">Change</button>
       </div>
     </div>
 
@@ -290,25 +276,6 @@
   <div id="bootError"></div>
 
 <script>
-/* ------------------ CONSTANTS ------------------ */
-const AUDIO_PIANO='./audio';
-const AUDIO_GUITAR='./Guitar';
-const AUDIO_TYPES = {PIANO: 'piano', SINE: 'sine', GUITAR: 'guitar'};
-const PC=["C","Db","D","Eb","E","F","Gb","G","Ab","A","Bb","B"];
-const PC_LABEL={ C:"C", Db:"C#/Db", D:"D", Eb:"D#/Eb", E:"E", F:"F", Gb:"F#/Gb", G:"G", Ab:"G#/Ab", A:"A", Bb:"A#/Bb", B:"B" };
-const UNLOCK_ORDER = ["F","E","Gb","Eb","G","D","Ab","Db","A","C","Bb","B"];
-
-const LEVELS_PER_SET=24, SETS=12, LEVELS_TOTAL=SETS*LEVELS_PER_SET;
-const TONE_MS=800;
-const THRESH_24=[0.20,0.25,0.30,0.35,0.40,0.45,0.50,0.55,0.60,0.60,0.65,0.70,0.75,0.78,0.80,0.83,0.85,0.88,0.90,0.90,0.90,0.90,0.90,0.90];
-function blockHasFeedback(block){ return block<=20; }
-function rtWindowForSet(n){const a=1183,b=2028;return Math.round(a+(n-1)*(b-a)/11);}
-const OOB_RATE=0.25;
-const SESS_DAILY_MS=20*60*1000;
-const WEEKLY_TARGET_MS=2*3600*1000;
-const LOCKOUT_MS=23*3600*1000;
-const LATENCY_CUSHION_MS=100;
-
 /* ------------------ SAFE HELPERS + STATE ------------------ */
 function byId(id){ return document.getElementById(id); }
 function safe(id, fn){ const el=byId(id); if(el) try{ fn(el); }catch(e){report(e);} }
@@ -331,19 +298,30 @@ try{
     lastSeen:null, flappyHighScore:0,
     thisWeekIdx:0, thisWeekMs:0,
     levelFailCounts:{},
-    specialRanForLevel:null,
-    audioType: AUDIO_TYPES.PIANO
+    specialRanForLevel:null
   };
 } catch(e){
-  state = { userName:null, levelIndex:1, levelTrials:0, levelCorrect:0, shepardDoneFor:-1, sessions:[], trials:[], startDate:null, lockoutUntil:null, capResetAt:null, testFailStreak:0, suggestShownSet:null, lastSeen:null, flappyHighScore:0, thisWeekIdx:0, thisWeekMs:0, levelFailCounts:{}, specialRanForLevel:null, audioType: AUDIO_TYPES.PIANO };
-}
-// Migration for audioType
-if (!state.audioType) {
-  state.audioType = AUDIO_TYPES.PIANO;
-  save();
+  state = { userName:null, levelIndex:1, levelTrials:0, levelCorrect:0, shepardDoneFor:-1, sessions:[], trials:[], startDate:null, lockoutUntil:null, capResetAt:null, testFailStreak:0, suggestShownSet:null, lastSeen:null, flappyHighScore:0, thisWeekIdx:0, thisWeekMs:0, levelFailCounts:{}, specialRanForLevel:null };
 }
 function save(){ try{ localStorage.setItem('apTrainer', JSON.stringify(state)); }catch(e){ report(e); } }
 window.state = state;
+
+/* ------------------ CONSTANTS ------------------ */
+const AUDIO_PIANO='./audio';
+const PC=["C","Db","D","Eb","E","F","Gb","G","Ab","A","Bb","B"];
+const PC_LABEL={ C:"C", Db:"C#/Db", D:"D", Eb:"D#/Eb", E:"E", F:"F", Gb:"F#/Gb", G:"G", Ab:"G#/Ab", A:"A", Bb:"A#/Bb", B:"B" };
+const UNLOCK_ORDER = ["F","E","Gb","Eb","G","D","Ab","Db","A","C","Bb","B"];
+
+const LEVELS_PER_SET=24, SETS=12, LEVELS_TOTAL=SETS*LEVELS_PER_SET;
+const TONE_MS=800;
+const THRESH_24=[0.20,0.25,0.30,0.35,0.40,0.45,0.50,0.55,0.60,0.60,0.65,0.70,0.75,0.78,0.80,0.83,0.85,0.88,0.90,0.90,0.90,0.90,0.90,0.90];
+function blockHasFeedback(block){ return block<=20; }
+function rtWindowForSet(n){const a=1183,b=2028;return Math.round(a+(n-1)*(b-a)/11);}
+const OOB_RATE=0.25;
+const SESS_DAILY_MS=20*60*1000;
+const LOCKOUT_MS=6*60*60*1000;
+const WEEKLY_TARGET_MS=2*60*60*1000;
+const LATENCY_CUSHION_MS = 120;
 
 /* ------------------ TIME HELPERS ------------------ */
 function fmtMMSS(ms){ const s=Math.max(0,Math.floor(ms/1000)); const m=Math.floor(s/60); const ss=String(s%60).padStart(2,'0'); return `${m}:${ss}`; }
@@ -443,94 +421,22 @@ async function resumeCtx(){ try{ const ctx=getCtx(); if(ctx.state==='suspended')
 async function loadBuffer(url){ if(BUF_CACHE.has(url)) return BUF_CACHE.get(url); const res=await fetch(url); if(!res.ok) throw new Error('Missing audio '+url); const arr=await res.arrayBuffer(); const buf=await getCtx().decodeAudioData(arr); BUF_CACHE.set(url,buf); return buf; }
 async function closeAudio(){ try{ if(ACTX){ await ACTX.close(); } }catch(_){} finally{ ACTX=null; BUF_CACHE.clear(); } }
 
-/* Guitar sample mapping - available samples and their pitches */
-const GUITAR_SAMPLES = {
-  'E2': 'E2.wav', 'A2': 'A2.wav', 'D3': 'D3.wav', 
-  'G3': 'G3.wav', 'B3': 'B3.wav', 'E4': 'E4.wav', 'A4': 'A4.wav'
-};
-
-/* Find closest guitar sample for pitch shifting */
-function findClosestGuitarSample(targetNote) {
-  const m=/^([A-G](?:b)?)(\d)$/.exec(targetNote);
-  const pc=m?m[1]:'A', o=m?+m[2]:4;
-  const idx={C:0,Db:1,D:2,Eb:3,E:4,F:5,Gb:6,G:7,Ab:8,A:9,Bb:10,B:11};
-  const targetSemis=(idx[pc]??9)+(o-4)*12;
-  
-  let bestSample = 'E2';
-  let bestDistance = 999;
-  
-  for (const sampleNote of Object.keys(GUITAR_SAMPLES)) {
-    const sm=/^([A-G](?:b)?)(\d)$/.exec(sampleNote);
-    const spc=sm?sm[1]:'E', so=sm?+sm[2]:2;
-    const sampleSemis=(idx[spc]??4)+(so-4)*12;
-    const distance = Math.abs(targetSemis - sampleSemis);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      bestSample = sampleNote;
-    }
-  }
-  
-  return { sample: bestSample, semitones: targetSemis - ((idx[bestSample.match(/^([A-G](?:b)?)/)[1]]??4)+((+bestSample.match(/(\d)$/)[1])-4)*12) };
-}
-
 /* Always play a tone (sample -> oscillator -> fallback) */
 async function playSample(note){
   try{
     await resumeCtx();
     const ctx = getCtx();
-    
-    // Handle different audio types
-    if (state.audioType === AUDIO_TYPES.PIANO) {
-      try{
-        const url = `${AUDIO_PIANO}/${note}.mp3`;
-        const buf = await loadBuffer(url);
-        const src = ctx.createBufferSource();
-        src.buffer = buf;
-        const g = ctx.createGain(); g.gain.value = 1;
-        src.connect(g).connect(ctx.destination);
-        const t = ctx.currentTime;
-        src.start(t); src.stop(t + TONE_MS/1000);
-        return;
-      }catch(_e){}
-    } else if (state.audioType === AUDIO_TYPES.GUITAR) {
-      try{
-        const {sample, semitones} = findClosestGuitarSample(note);
-        const url = `${AUDIO_GUITAR}/${GUITAR_SAMPLES[sample]}`;
-        const buf = await loadBuffer(url);
-        const src = ctx.createBufferSource();
-        src.buffer = buf;
-        
-        // Apply pitch shifting
-        const pitchRatio = Math.pow(2, semitones / 12);
-        src.playbackRate.value = pitchRatio;
-        
-        // Guitar samples are louder, so reduce gain
-        const g = ctx.createGain(); 
-        g.gain.value = 0.7; // Reduce guitar volume
-        
-        src.connect(g).connect(ctx.destination);
-        const t = ctx.currentTime;
-        src.start(t); src.stop(t + TONE_MS/1000 / pitchRatio);
-        return;
-      }catch(_e){}
-    } else if (state.audioType === AUDIO_TYPES.SINE) {
-      // Skip to sine wave generation
-    } else {
-      // Default to piano, fallback to sine
-      try{
-        const url = `${AUDIO_PIANO}/${note}.mp3`;
-        const buf = await loadBuffer(url);
-        const src = ctx.createBufferSource();
-        src.buffer = buf;
-        const g = ctx.createGain(); g.gain.value = 1;
-        src.connect(g).connect(ctx.destination);
-        const t = ctx.currentTime;
-        src.start(t); src.stop(t + TONE_MS/1000);
-        return;
-      }catch(_e){}
-    }
-    
-    // Fallback to sine wave
+    try{
+      const url = `${AUDIO_PIANO}/${note}.mp3`;
+      const buf = await loadBuffer(url);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const g = ctx.createGain(); g.gain.value = 1;
+      src.connect(g).connect(ctx.destination);
+      const t = ctx.currentTime;
+      src.start(t); src.stop(t + TONE_MS/1000);
+      return;
+    }catch(_e){}
     const m=/^([A-G](?:b)?)(\d)$/.exec(note);
     const pc=m?m[1]:'A', o=m?+m[2]:4;
     const idx={C:0,Db:1,D:2,Eb:3,E:4,F:5,Gb:6,G:7,Ab:8,A:9,Bb:10,B:11};
@@ -600,12 +506,7 @@ function currentOOBs(setSize){
   if(!learned.includes(dn2) && !learned.includes(dn1)) out.push(PC[dn2]);
   return out;
 }
-function currentOctaves(){ 
-  if (state.audioType === AUDIO_TYPES.GUITAR) {
-    return [3,4,5]; // Guitar uses C3-B5
-  }
-  return [4,5,6]; // Piano uses C4-B6
-}
+function currentOctaves(){ return [4,5,6]; }
 function rand(a){ return a[Math.floor(Math.random()*a.length)]; }
 function pcLabel(pc){ return PC_LABEL[pc] || pc; }
 
@@ -1099,22 +1000,6 @@ function wireOnce(){
     const v = parseInt(byId('setSizeSelect')?.value||'1',10)||1;
     state.levelIndex=(v-1)*LEVELS_PER_SET+1; state.levelTrials=0; state.levelCorrect=0; state.shepardDoneFor=-1; state.testFailStreak=0; suggestedRestartFlag=false; state.suggestShownSet=null; save();
     alert(`Scope set to ${v} ${v===1?'pitch':'pitches'} (Block 1/24)`); paintNotes();
-  });
-
-  // Audio type selection
-  safe('audioTypeSelect', el=> {
-    el.value = state.audioType || AUDIO_TYPES.PIANO;
-  });
-  safe('applyAudioBtn', el=> el.onclick=()=>{
-    const newType = byId('audioTypeSelect')?.value || AUDIO_TYPES.PIANO;
-    state.audioType = newType;
-    save();
-    const labels = {
-      [AUDIO_TYPES.PIANO]: 'Piano (C4-B6)',
-      [AUDIO_TYPES.SINE]: 'Sine Wave (C4-B6)', 
-      [AUDIO_TYPES.GUITAR]: 'Guitar (C3-B5)'
-    };
-    alert(`Audio changed to ${labels[newType] || 'Piano'}`);
   });
 
   // Trainer controls
