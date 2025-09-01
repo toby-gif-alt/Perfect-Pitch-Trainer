@@ -156,6 +156,7 @@
     </div>
     <div class="row">
       <button id="menuStart">▶ Start Training</button>
+      <button id="startAssessment">📊 Assessment Test</button>
       <button id="playFlappy">🐤 Flappy (lockout only)</button>
       <button id="resetLockout">⚡ Reset lockout/timer</button>
       <button id="menuReset">⟲ Reset (factory)</button>
@@ -250,6 +251,36 @@
     <p style="opacity:.75;margin-top:8px">800 ms tone • RT limit adapts with set size • 24 blocks per set • Octaves randomized (C4–B6)</p>
   </div>
 
+  <!-- Assessment Screen -->
+  <div id="assessmentScreen" class="screen">
+    <div class="card">
+      <h2>📊 Assessment Test</h2>
+      <div class="row">
+        <span class="pill" id="assessmentProgress">Trial 0 / 20</span>
+        <button id="btnBackMenuAssessment">↩ Menu</button>
+      </div>
+      
+      <div style="text-align:center;margin:20px 0">
+        <span id="assessmentPrompt" class="pill">Press Start to begin assessment</span>
+        <div style="margin-top:12px">
+          <button id="btnStartAssessment">▶ Start Assessment</button>
+        </div>
+      </div>
+      
+      <!-- Note pad for assessment -->
+      <div class="note-pad" id="assessmentPad"></div>
+      
+      <div id="assessmentResults" style="display:none;text-align:center;margin-top:20px">
+        <h3>Assessment Results</h3>
+        <div id="assessmentStats" style="margin:16px 0"></div>
+        <button id="btnRetryAssessment">Try Again</button>
+        <button id="btnBackMenuFromResults">Back to Menu</button>
+      </div>
+      
+      <p style="opacity:.75;margin-top:8px">20 random pitches using random audio types • No feedback during test</p>
+    </div>
+  </div>
+
   <!-- Feedback -->
   <div id="feedbackOverlay"><div id="feedbackBox"></div></div>
 
@@ -332,7 +363,8 @@ try{
     thisWeekIdx:0, thisWeekMs:0,
     levelFailCounts:{},
     specialRanForLevel:null,
-    audioType: AUDIO_TYPES.PIANO
+    audioType: AUDIO_TYPES.PIANO,
+    assessmentScores: []
   };
 } catch(e){
   state = { userName:null, levelIndex:1, levelTrials:0, levelCorrect:0, shepardDoneFor:-1, sessions:[], trials:[], startDate:null, lockoutUntil:null, capResetAt:null, testFailStreak:0, suggestShownSet:null, lastSeen:null, flappyHighScore:0, thisWeekIdx:0, thisWeekMs:0, levelFailCounts:{}, specialRanForLevel:null, audioType: AUDIO_TYPES.PIANO };
@@ -340,6 +372,11 @@ try{
 // Migration for audioType
 if (!state.audioType) {
   state.audioType = AUDIO_TYPES.PIANO;
+  save();
+}
+// Migration for assessmentScores
+if (!state.assessmentScores) {
+  state.assessmentScores = [];
   save();
 }
 function save(){ try{ localStorage.setItem('apTrainer', JSON.stringify(state)); }catch(e){ report(e); } }
@@ -587,6 +624,9 @@ let suggestedRestartFlag=false;
 /* Specials runtime */
 let special=null; // {mode:'A'|'B', targetPc:'F', total:12|22, done:0, withFeedback:true, correct:0}
 
+/* Assessment runtime */
+let assessmentActive=false, assessmentTrials=[], assessmentCurrentTrial=0;
+
 const PC2I={C:0,Db:1,D:2,Eb:3,E:4,F:5,Gb:6,G:7,Ab:8,A:9,Bb:10,B:11};
 function currentOOBs(setSize){
   if(setSize>=12) return [];
@@ -746,6 +786,167 @@ function answerSpecial(userSaysTarget){
   setTimeout(()=> nextSpecialTrial(), Math.max(500, delayMs));
 }
 
+/* ------------------ ASSESSMENT TEST ------------------ */
+function startAssessment() {
+  showScreen('assessmentScreen');
+  assessmentActive = false;
+  assessmentTrials = [];
+  assessmentCurrentTrial = 0;
+  
+  text('assessmentProgress', 'Trial 0 / 20');
+  text('assessmentPrompt', 'Press Start to begin assessment');
+  hide('assessmentResults');
+  
+  populateAssessmentNotes();
+}
+
+function populateAssessmentNotes() {
+  const pad = byId('assessmentPad');
+  if (!pad) return;
+  pad.innerHTML = '';
+  
+  for (const pc of PC) {
+    const b = document.createElement('button');
+    b.textContent = pcLabel(pc);
+    b.dataset.pc = pc;
+    b.className = 'note';
+    b.type = 'button';
+    b.addEventListener('click', () => assessmentGuess(pc));
+    pad.appendChild(b);
+  }
+}
+
+function beginAssessment() {
+  assessmentActive = true;
+  assessmentTrials = [];
+  assessmentCurrentTrial = 0;
+  
+  // Generate 20 random trials with random audio types and pitches
+  for (let i = 0; i < 20; i++) {
+    const audioTypes = [AUDIO_TYPES.PIANO, AUDIO_TYPES.SINE, AUDIO_TYPES.GUITAR];
+    const randomAudioType = rand(audioTypes);
+    const randomPc = rand(PC);
+    
+    // Use appropriate octave range for the audio type
+    let octaves;
+    if (randomAudioType === AUDIO_TYPES.GUITAR) {
+      octaves = [3, 4, 5];
+    } else {
+      octaves = [4, 5, 6];
+    }
+    const randomOctave = rand(octaves);
+    
+    assessmentTrials.push({
+      pc: randomPc,
+      note: `${randomPc}${randomOctave}`,
+      audioType: randomAudioType,
+      answered: false,
+      guess: null,
+      correct: false
+    });
+  }
+  
+  nextAssessmentTrial();
+}
+
+async function nextAssessmentTrial() {
+  if (assessmentCurrentTrial >= assessmentTrials.length) {
+    completeAssessment();
+    return;
+  }
+  
+  const trial = assessmentTrials[assessmentCurrentTrial];
+  text('assessmentProgress', `Trial ${assessmentCurrentTrial + 1} / 20`);
+  text('assessmentPrompt', 'Listening… choose the pitch');
+  
+  // Temporarily change audio type for this trial
+  const originalAudioType = state.audioType;
+  state.audioType = trial.audioType;
+  
+  try {
+    await playSample(trial.note);
+  } finally {
+    // Restore original audio type
+    state.audioType = originalAudioType;
+  }
+}
+
+function assessmentGuess(pc) {
+  if (!assessmentActive || assessmentCurrentTrial >= assessmentTrials.length) return;
+  
+  const trial = assessmentTrials[assessmentCurrentTrial];
+  if (trial.answered) return;
+  
+  trial.answered = true;
+  trial.guess = pc;
+  trial.correct = (pc === trial.pc);
+  
+  assessmentCurrentTrial++;
+  
+  // Small delay before next trial
+  setTimeout(() => {
+    if (assessmentCurrentTrial < assessmentTrials.length) {
+      nextAssessmentTrial();
+    } else {
+      completeAssessment();
+    }
+  }, 800);
+}
+
+function completeAssessment() {
+  assessmentActive = false;
+  
+  let correct = 0;
+  let nearMiss = 0; // Within ±1 semitone
+  
+  for (const trial of assessmentTrials) {
+    if (trial.correct) {
+      correct++;
+    } else if (trial.guess) {
+      const targetIdx = PC2I[trial.pc];
+      const guessIdx = PC2I[trial.guess];
+      const distance = Math.min(
+        Math.abs(targetIdx - guessIdx),
+        12 - Math.abs(targetIdx - guessIdx)
+      );
+      if (distance <= 1) {
+        nearMiss++;
+      }
+    }
+  }
+  
+  const exactPercent = Math.round((correct / 20) * 100);
+  const nearMissPercent = Math.round((nearMiss / 20) * 100);
+  
+  // Store result
+  const result = {
+    date: Date.now(),
+    exact: exactPercent,
+    nearMiss: nearMissPercent,
+    trials: assessmentTrials.slice()
+  };
+  
+  state.assessmentScores.push(result);
+  save();
+  
+  // Show results
+  const stats = byId('assessmentStats');
+  if (stats) {
+    stats.innerHTML = `
+      <div style="font-size:18px;margin:8px 0">
+        <div><strong>Exact Correct: ${exactPercent}%</strong> (${correct}/20)</div>
+        <div>Within ±1 semitone: ${nearMissPercent}% (${nearMiss}/20)</div>
+      </div>
+    `;
+  }
+  
+  text('assessmentPrompt', 'Assessment complete!');
+  showBlock('assessmentResults');
+  
+  // Update chart if possible
+  try { drawChart(); } catch(_) {}
+}
+
 /* -------- Normal trials -------- */
 function guess(pc){
   if(!sessionActive || paused || shepRunning || special) return;
@@ -857,7 +1058,28 @@ function advanceCheck(){
   if(state.levelTrials<20) return;
   const acc=state.levelCorrect/state.levelTrials, need=thresholdForIndex(state.levelIndex);
   const passed = acc>=need;
+  const block = blockFromIndex(state.levelIndex);
   const key = String(state.levelIndex);
+  
+  // Show feedback for test blocks (21-24) at completion
+  if(block >= 21) {
+    const percentage = Math.round(acc * 100);
+    if(passed) {
+      alert(`Well done, you passed with ${percentage}%!`);
+    } else {
+      alert(`Sorry you didn't make it with ${percentage}%.`);
+      
+      // Check for 4-fail streak and show struggle suggestion
+      if(state.testFailStreak >= 4) {
+        const confirmed = confirm(`Struggling? Perhaps go back to the start of set?\n\nClick OK to restart the set, or Cancel to dismiss and try again.`);
+        if(confirmed) {
+          restartCurrentSet();
+          return;
+        }
+      }
+    }
+  }
+  
   if(!passed){
     state.levelFailCounts[key] = (state.levelFailCounts[key]||0) + 1;
     if(state.levelFailCounts[key] >= 10){
@@ -1076,6 +1298,7 @@ function wireOnce(){
 
   // Menu
   safe('menuStart',   el=> el.onclick=()=> startSession());
+  safe('startAssessment', el=> el.onclick=()=> startAssessment());
   safe('playFlappy',  el=> el.onclick=()=> openFlappyFromMenu());
   safe('resetLockout',el=> el.onclick=()=>{
     if(!confirm('Reset lockout/timer now? This starts a fresh 20-minute window immediately.')) return;
@@ -1083,6 +1306,12 @@ function wireOnce(){
     save(); updateCapsUI(); alert('Timer reset. You can start training now.');
   });
   safe('menuReset',   el=> el.onclick=()=> doFactoryReset());
+
+  // Assessment screen
+  safe('btnStartAssessment', el=> el.onclick=()=> beginAssessment());
+  safe('btnBackMenuAssessment', el=> el.onclick=()=> { assessmentActive=false; showScreen('menuScreen'); populatePitchSelect(); drawChart(); });
+  safe('btnRetryAssessment', el=> el.onclick=()=> { hide('assessmentResults'); beginAssessment(); });
+  safe('btnBackMenuFromResults', el=> el.onclick=()=> { assessmentActive=false; showScreen('menuScreen'); populatePitchSelect(); drawChart(); });
 
   // Set selector
   safe('setSizeSelect', sel=>{
