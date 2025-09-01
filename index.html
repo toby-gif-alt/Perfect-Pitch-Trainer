@@ -14,8 +14,8 @@
   button{margin:6px;padding:10px 16px;border-radius:12px;border:none;cursor:pointer;font-size:14px;background:var(--muted);color:var(--text);transition:transform .06s ease, filter .12s ease, background .12s ease, border-color .12s ease}
   button:hover{transform:translateY(-1px)}
   button:active{transform:translateY(0)}
-  button:disabled{opacity:.55; cursor:not-allowed; background:var(--muted2); border:1.5px dashed #4a5a78}
-  input,select{padding:10px 12px;border-radius:12px;border:1px solid var(--muted);background:#0b1224;color:var(--text)}
+  button:disabled{opacity:.55; cursor:not-allowed; background:var(--muted2); border:1.5px dashed var(--muted)}
+  input,select{padding:10px 12px;border-radius:12px;border:1px solid var(--muted);background:var(--card);color:var(--text)}
   select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--text) 50%),linear-gradient(135deg,var(--text) 50%,transparent 50%),linear-gradient(to right,transparent,transparent);
          background-position:calc(100% - 20px) 16px, calc(100% - 14px) 16px, 100% 0; background-size:6px 6px,6px 6px, 2.5em 2.5em; background-repeat:no-repeat}
   label{opacity:.9}
@@ -24,7 +24,7 @@
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
   .note-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}
   .note{min-height:64px;font-size:18px;border-radius:14px}
-  .note.inert{background:#253147 !important; border:1.5px dashed #41506d; cursor:not-allowed}
+  .note.inert{background:var(--muted2) !important; border:1.5px dashed var(--muted); cursor:not-allowed}
   .wide{grid-column:1 / -1}
   #barStatus{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
   #barControls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
@@ -32,30 +32,30 @@
   #feedbackBox{min-width:240px;text-align:center;padding:16px 18px;border-radius:14px;font-weight:700;font-size:20px;box-shadow:0 20px 60px rgba(0,0,0,.35);transform:scale(.9);opacity:0;transition:transform .15s,opacity .15s}
   #feedbackOverlay.show #feedbackBox{transform:scale(1.05);opacity:1}
   #shepardOverlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:60}
-  #shepardBox{background:#0b1325;border:1px solid #22304d;padding:20px 24px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35);text-align:center}
-  #bootError{display:none;position:fixed;left:12px;right:12px;bottom:12px;background:#7f1d1d;color:#fff;padding:10px 12px;border-radius:10px;box-shadow:0 4px 18px rgba(0,0,0,.35);z-index:9999;font:13px/1.35 system-ui,sans-serif;white-space:pre-wrap}
+  #shepardBox{background:var(--card);border:1px solid var(--muted);padding:20px 24px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35);text-align:center}
+  #bootError{display:none;position:fixed;left:12px;right:12px;bottom:12px;background:var(--bad);color:var(--text);padding:10px 12px;border-radius:10px;box-shadow:0 4px 18px rgba(0,0,0,.35);z-index:9999;font:13px/1.35 system-ui,sans-serif;white-space:pre-wrap}
 
   /* Flappy */
   #flappyModal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:50}
-  #flappyCanvas{background:#0b1325;width:320px;height:480px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;outline:none}
+  #flappyCanvas{background:var(--card);width:320px;height:480px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;outline:none}
 
   input[type="range"].disabled{opacity:.4;filter:grayscale(1)}
 
   /* Suggestion banner */
-  #suggestBanner{display:none;margin:8px 0 4px;padding:10px 12px;border-radius:12px;background:#22304d;border:1px solid #2f4166;color:#e8efff;align-items:center;gap:10px}
+  #suggestBanner{display:none;margin:8px 0 4px;padding:10px 12px;border-radius:12px;background:var(--muted2);border:1px solid var(--muted);color:var(--text);align-items:center;gap:10px}
   #suggestBanner button{margin:0 4px;padding:8px 12px;border-radius:10px;font-size:13px}
   #btnRestartSet{background:var(--good)}
   #btnDismissSuggest{background:var(--muted)}
 
   /* Modals */
   #strictModal,#welcomeModal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:1000;background:rgba(0,0,0,.55);pointer-events:auto}
-  #strictBox,#welcomeBox{width:min(760px,92vw);background:#0b1325;border:1px solid #22304d;border-radius:16px;padding:18px 20px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  #strictBox,#welcomeBox{width:min(760px,92vw);background:var(--card);border:1px solid var(--muted);border-radius:16px;padding:18px 20px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
   #strictBox h3,#welcomeBox h2{margin:0 0 8px}
   #strictBtns,#welcomeBtns{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
   #btnStrictResume{background:var(--good)}
   #btnStrictMenu{background:var(--muted)}
   #welcomeBtns button{background:var(--muted)}
-  #tutorialWrap{background:#0b1224;border:1px solid #26324a;border-radius:12px;padding:12px;margin:10px 0}
+  #tutorialWrap{background:var(--card);border:1px solid var(--muted);border-radius:12px;padding:12px;margin:10px 0}
 
   /* Progress (charts) */
   #progressCard{margin-top:14px}
@@ -70,7 +70,7 @@
   #tBack{visibility:hidden}
 
   /* Special exercise strip */
-  #specialBar{display:none;align-items:center;justify-content:space-between;background:#22304d;border:1px solid #2f4166;color:#e8efff;padding:8px 12px;border-radius:10px;margin-bottom:10px}
+  #specialBar{display:none;align-items:center;justify-content:space-between;background:var(--muted2);border:1px solid var(--muted);color:var(--text);padding:8px 12px;border-radius:10px;margin-bottom:10px}
 
   /* Scope picker CTA styling */
   .scopeWrap{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:12px;background:var(--muted2);border:1px solid var(--muted)}
@@ -1882,11 +1882,11 @@ function progressiveDifficulty(){ // only speed scales; gap remains constant aft
   const target = FLAPPY.baseSpeed + Math.min(Math.floor(score/5)*18, FLAPPY.maxSpeed - FLAPPY.baseSpeed);
   FLAPPY.speed = target;
 }
-function drawBird(){ const ctx=fCtx; if(!ctx) return; const body=getComputedStyle(document.documentElement).getPropertyValue('--accent')||'#fbbf24'; const wingCol='#ffd166'; const outline='#111';
+function drawBird(){ const ctx=fCtx; if(!ctx) return; const body=getComputedStyle(document.documentElement).getPropertyValue('--accent')||'#fbbf24'; const wingCol=getComputedStyle(document.documentElement).getPropertyValue('--good')||'#16a34a'; const outline=getComputedStyle(document.documentElement).getPropertyValue('--bg')||'#0f172a';
   ctx.save();
   const tilt=Math.max(-0.6,Math.min(0.6,bird.vy/380)); ctx.translate(bird.x,bird.y); ctx.rotate(tilt);
   ctx.fillStyle=body; ctx.beginPath(); ctx.arc(0,0,10,0,Math.PI*2); ctx.fill();
-  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(3,-4,3,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--text')||'#e5e7eb'; ctx.beginPath(); ctx.arc(3,-4,3,0,Math.PI*2); ctx.fill();
   ctx.fillStyle=outline; ctx.beginPath(); ctx.arc(4,-4,1.5,0,Math.PI*2); ctx.fill();
   bird.wing+=0.25; const wing=Math.sin(bird.wing)*0.9; ctx.save(); ctx.rotate(wing);
   ctx.fillStyle=wingCol; ctx.beginPath(); ctx.moveTo(-2,2); ctx.quadraticCurveTo(-16,4,-8,12); ctx.quadraticCurveTo(0,10,-2,2); ctx.fill();
