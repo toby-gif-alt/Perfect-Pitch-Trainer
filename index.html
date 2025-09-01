@@ -73,11 +73,11 @@
   #specialBar{display:none;align-items:center;justify-content:space-between;background:#22304d;border:1px solid #2f4166;color:#e8efff;padding:8px 12px;border-radius:10px;margin-bottom:10px}
 
   /* Scope picker CTA styling */
-  .scopeWrap{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:12px;background:#17223a;border:1px solid #2b3b5c}
+  .scopeWrap{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:12px;background:var(--muted2);border:1px solid var(--muted)}
   .scopeWrap:hover{box-shadow:0 0 0 2px rgba(251,191,36,.25) inset}
-  .scopeSelect{background:#0b1224;border:1.5px solid #3b4b6b;border-radius:10px;padding:8px 36px 8px 10px;font-weight:600}
-  .scopeSelect:focus{outline:none; box-shadow:0 0 0 2px #fbbf24}
-  .scopeBtn{background:#fbbf24;color:#0b0f1c;font-weight:700}
+  .scopeSelect{background:var(--card);border:1.5px solid var(--muted);border-radius:10px;padding:8px 36px 8px 10px;font-weight:600}
+  .scopeSelect:focus{outline:none; box-shadow:0 0 0 2px var(--accent)}
+  .scopeBtn{background:var(--accent);color:var(--bg);font-weight:700}
 </style>
 </head>
 <body>
@@ -228,7 +228,7 @@
           <span class="legendDot" style="background:var(--neutral);margin-left:12px)"></span> <span id="legTrend">No-trial day</span>
         </div>
       </div>
-      <canvas id="progressCanvas" width="1000" height="300" style="width:100%;height:auto;border-radius:12px;background:#0b1224;border:1px solid #26324a"></canvas>
+      <canvas id="progressCanvas" width="1000" height="300" style="width:100%;height:auto;border-radius:12px;background:var(--card);border:1px solid var(--muted)"></canvas>
     </div>
   </div>
 
@@ -245,12 +245,12 @@
         <span class="legendDot" style="background:var(--good)"></span> <span>Exact Correct %</span>
         <span class="legendDot" style="background:var(--accent);margin-left:12px"></span> <span>Within ±1 semitone %</span>
       </div>
-      <canvas id="trackerCanvas" width="1000" height="300" style="width:100%;height:auto;border-radius:12px;background:#0b1224;border:1px solid #26324a"></canvas>
+      <canvas id="trackerCanvas" width="1000" height="300" style="width:100%;height:auto;border-radius:12px;background:var(--card);border:1px solid var(--muted)"></canvas>
     </div>
     
     <div id="trackerDetails" style="margin-top:16px">
       <h3>Assessment History</h3>
-      <div id="trackerHistory" style="max-height:200px;overflow-y:auto;border:1px solid var(--muted);border-radius:12px;padding:12px;background:#0b1224">
+      <div id="trackerHistory" style="max-height:200px;overflow-y:auto;border:1px solid var(--muted);border-radius:12px;padding:12px;background:var(--card)">
         <p style="opacity:0.7;text-align:center">No assessments completed yet</p>
       </div>
     </div>
@@ -1260,7 +1260,9 @@ function drawTrackerChart() {
   const P = {l: 56, r: 24, t: 16, b: 28};
   const AX = P.l, AY = P.t, AW = W - P.l - P.r, AH = H - P.t - P.b;
   
-  ctx.fillStyle = '#0b1224';
+  const colCard = getComputedStyle(document.documentElement).getPropertyValue('--card') || '#1e293b';
+  const colMuted = getComputedStyle(document.documentElement).getPropertyValue('--muted') || '#334155';
+  ctx.fillStyle = colCard;
   ctx.fillRect(0, 0, W, H);
   
   const scores = state.assessmentScores || [];
@@ -1280,7 +1282,7 @@ function drawTrackerChart() {
   const yScale = (pct) => AY + AH - (pct / 100) * AH;
   
   // Draw grid lines
-  ctx.strokeStyle = '#2a3a54';
+  ctx.strokeStyle = colMuted;
   ctx.lineWidth = 1;
   for (let i = 0; i <= 100; i += 20) {
     const y = yScale(i);
@@ -1616,25 +1618,28 @@ function drawChart(){
   const W = canvas.width, H = canvas.height;
   ctx.clearRect(0,0,W,H);
   const P={l:56,r:24,t:16,b:28}; const AX=P.l, AY=P.t, AW=W-P.l-P.r, AH=H-P.t-P.b;
-  ctx.fillStyle='#0b1224'; ctx.fillRect(0,0,W,H);
+  const colCard = getComputedStyle(document.documentElement).getPropertyValue('--card') || '#1e293b';
+  ctx.fillStyle=colCard; ctx.fillRect(0,0,W,H);
   const mode=byId('granularitySelect')?.value||'WEEKLY';
   const pitch=byId('pitchSelect')?.value||'OVERALL';
   const colGood=getComputedStyle(document.documentElement).getPropertyValue('--good')||'#16a34a';
   const colNeutral=getComputedStyle(document.documentElement).getPropertyValue('--neutral')||'#94a3b8';
+  const colMuted=getComputedStyle(document.documentElement).getPropertyValue('--muted')||'#334155';
+  const colText=getComputedStyle(document.documentElement).getPropertyValue('--text')||'#e5e7eb';
   const yscale=(v)=> AY + AH - (v/100)*AH;
 
   /* Y grid + labels */
-  ctx.strokeStyle='#20314d'; ctx.lineWidth=1; ctx.beginPath();
+  ctx.strokeStyle=colMuted; ctx.lineWidth=1; ctx.beginPath();
   for(let gy=0; gy<=100; gy+=20){ const y=yscale(gy); ctx.moveTo(AX,y); ctx.lineTo(AX+AW,y);} ctx.stroke();
-  ctx.fillStyle='rgba(229,231,235,0.9)'; ctx.font='12px system-ui,sans-serif';
+  ctx.fillStyle=colText; ctx.font='12px system-ui,sans-serif';
   for(let gy=0; gy<=100; gy+=20){ const y=yscale(gy)+4; ctx.fillText(String(gy)+'%', 8, y); }
 
   if(mode==='WEEKLY'){
     const bins=thisWeekBins(pitch);
     const xscale=(d)=> AX + ((d - 1)/(7 - 1))*AW;
-    ctx.strokeStyle='#20314d'; ctx.beginPath();
+    ctx.strokeStyle=colMuted; ctx.beginPath();
     for(let d=1; d<=7; d++){ const x=xscale(d); ctx.moveTo(x,AY); ctx.lineTo(x,AY+AH);} ctx.stroke();
-    ctx.fillStyle='rgba(229,231,235,0.9)';
+    ctx.fillStyle=colText;
     for(let d=1; d<=7; d++){ const x=xscale(d); ctx.fillText(`Day ${d}`, x-18, H-6); }
     const pts=bins.map(b=> b.n===0? {x:b.day,y:null}:{x:b.day,y:Math.round((b.ok/b.n)*1000)/10});
     const accPts=pts.filter(p=> p.y!==null);
@@ -1646,9 +1651,9 @@ function drawChart(){
   } else {
     const weeks=eightWeekBins(pitch);
     const xscale=(w)=> AX + ((w - 1)/(8 - 1))*AW;
-    ctx.strokeStyle='#20314d'; ctx.beginPath();
+    ctx.strokeStyle=colMuted; ctx.beginPath();
     for(let w=1; w<=8; w++){ const x=xscale(w); ctx.moveTo(x,AY); ctx.lineTo(x,AY+AH);} ctx.stroke();
-    ctx.fillStyle='rgba(229,231,235,0.9)';
+    ctx.fillStyle=colText;
     for(let w=1; w<=8; w++){ const x=xscale(w); ctx.fillText(`Week ${w}`, x-22, H-6); }
     const pts=weeks.map(b=> b.n===0? {x:b.w,y:null}:{x:b.w,y:Math.round((b.ok/b.n)*1000)/10});
     const accPts=pts.filter(p=> p.y!==null);
@@ -1658,7 +1663,7 @@ function drawChart(){
       else      drawDot(ctx,xscale(p.w), yscale(0), colNeutral, 4);
     }
   }
-  ctx.fillStyle='rgba(229,231,235,0.85)'; ctx.font='13px system-ui,sans-serif';
+  ctx.fillStyle=colText; ctx.font='13px system-ui,sans-serif';
   const label=(pitch==='OVERALL')?'Overall':`Pitch: ${pcLabel(pitch)}`;
   ctx.fillText(label, AX, AY-2);
 }
