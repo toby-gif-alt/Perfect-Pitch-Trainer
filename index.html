@@ -135,6 +135,15 @@
             <li>Timer stays paused until you press <strong>Play</strong> again.</li>
           </ul>
         </div>
+        <div class="tPage" id="tPage6">
+          <h3>📊 Assessment Test</h3>
+          <ul>
+            <li><strong>Purpose:</strong> Measure your absolute pitch ability with 20 random pitches across different audio types.</li>
+            <li><strong>When to take:</strong> At the start and end of your 8-week program, or weekly to track progress.</li>
+            <li><strong>Features:</strong> No feedback during test, results saved to tracker for progress monitoring.</li>
+            <li>View your assessment history and progress in the <strong>Track</strong> section from the main menu.</li>
+          </ul>
+        </div>
       </div>
       <div id="welcomeBtns">
         <div id="tutorialNav" style="width:100%">
@@ -157,6 +166,7 @@
     <div class="row">
       <button id="menuStart">▶ Start Training</button>
       <button id="startAssessment">📊 Assessment Test</button>
+      <button id="viewTracker">📊 Track</button>
       <button id="playFlappy">🐤 Flappy (lockout only)</button>
       <button id="resetLockout">⚡ Reset lockout/timer</button>
       <button id="menuReset">⟲ Reset (factory)</button>
@@ -219,6 +229,30 @@
         </div>
       </div>
       <canvas id="progressCanvas" width="1000" height="300" style="width:100%;height:auto;border-radius:12px;background:#0b1224;border:1px solid #26324a"></canvas>
+    </div>
+  </div>
+
+  <!-- Assessment Tracker Screen -->
+  <div class="card screen" id="trackerScreen">
+    <h1>📊 Assessment Tracker</h1>
+    <div class="row">
+      <span class="pill" id="trackerCount">0 assessments</span>
+      <button id="btnBackMenuTracker">↩ Menu</button>
+    </div>
+    
+    <div style="margin:20px 0">
+      <div id="trackerLegend" style="display:flex;gap:12px;align-items:center;font-size:13px;opacity:.9;margin-bottom:12px">
+        <span class="legendDot" style="background:var(--good)"></span> <span>Exact Correct %</span>
+        <span class="legendDot" style="background:var(--accent);margin-left:12px"></span> <span>Within ±1 semitone %</span>
+      </div>
+      <canvas id="trackerCanvas" width="1000" height="300" style="width:100%;height:auto;border-radius:12px;background:#0b1224;border:1px solid #26324a"></canvas>
+    </div>
+    
+    <div id="trackerDetails" style="margin-top:16px">
+      <h3>Assessment History</h3>
+      <div id="trackerHistory" style="max-height:200px;overflow-y:auto;border:1px solid var(--muted);border-radius:12px;padding:12px;background:#0b1224">
+        <p style="opacity:0.7;text-align:center">No assessments completed yet</p>
+      </div>
     </div>
   </div>
 
@@ -321,6 +355,37 @@
       </div>
       <p id="flappyScore">Score: 0 • Best: 0</p>
       <p style="opacity:.8;font-size:12px">Tap/click (or Space) to flap. First tap starts — each flap plays a random pitch.</p>
+    </div>
+  </div>
+
+  <!-- Assessment Warning Modal -->
+  <div id="assessmentWarningModal" style="position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:70">
+    <div class="card" style="max-width:500px;margin:20px;text-align:center">
+      <h2>📊 Assessment Test</h2>
+      <p><strong>Timing Recommendations:</strong></p>
+      <ul style="text-align:left;margin:16px 0">
+        <li>Take this test at the <strong>start of your 8-week training program</strong></li>
+        <li>Take it again at the <strong>end of the 8 weeks</strong> to track improvement</li>
+        <li>Optionally take it <strong>weekly</strong> to monitor progress</li>
+      </ul>
+      <p style="opacity:0.8">This test uses 20 random pitches across different audio types without feedback to assess your current absolute pitch ability.</p>
+      <div style="margin-top:20px">
+        <button id="btnProceedAssessment" style="background:var(--good);margin:0 8px">Continue to Test</button>
+        <button id="btnCancelAssessment" style="background:var(--muted);margin:0 8px">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Assessment Results Modal -->
+  <div id="assessmentResultsModal" style="position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:70">
+    <div class="card" style="max-width:500px;margin:20px;text-align:center">
+      <h2>📊 Assessment Complete!</h2>
+      <div id="modalAssessmentStats" style="margin:20px 0;font-size:18px"></div>
+      <p style="opacity:0.8;margin:16px 0">Your results have been saved to the tracker.</p>
+      <div style="margin-top:20px">
+        <button id="btnRetakeAssessmentModal" style="background:var(--good);margin:0 8px">Try Again</button>
+        <button id="btnBackMenuModal" style="background:var(--muted);margin:0 8px">Back to Menu</button>
+      </div>
     </div>
   </div>
 
@@ -959,6 +1024,14 @@ function answerSpecial(userSaysTarget){
 
 /* ------------------ ASSESSMENT TEST ------------------ */
 function startAssessment() {
+  // Show warning modal first
+  byId('assessmentWarningModal').style.display = 'flex';
+}
+
+function proceedWithAssessment() {
+  // Hide warning modal and start assessment
+  byId('assessmentWarningModal').style.display = 'none';
+  
   showScreen('assessmentScreen');
   assessmentActive = false;
   assessmentTrials = [];
@@ -969,6 +1042,10 @@ function startAssessment() {
   hide('assessmentResults');
   
   populateAssessmentNotes();
+}
+
+function cancelAssessment() {
+  byId('assessmentWarningModal').style.display = 'none';
 }
 
 function populateAssessmentNotes() {
@@ -1100,10 +1177,10 @@ function completeAssessment() {
   state.assessmentScores.push(result);
   save();
   
-  // Show results
-  const stats = byId('assessmentStats');
-  if (stats) {
-    stats.innerHTML = `
+  // Show results in modal
+  const modalStats = byId('modalAssessmentStats');
+  if (modalStats) {
+    modalStats.innerHTML = `
       <div style="font-size:18px;margin:8px 0">
         <div><strong>Exact Correct: ${exactPercent}%</strong> (${correct}/20)</div>
         <div>Within ±1 semitone: ${nearMissPercent}% (${nearMiss}/20)</div>
@@ -1111,11 +1188,158 @@ function completeAssessment() {
     `;
   }
   
-  text('assessmentPrompt', 'Assessment complete!');
-  showBlock('assessmentResults');
+  // Show results modal
+  byId('assessmentResultsModal').style.display = 'flex';
   
   // Update chart if possible
   try { drawChart(); } catch(_) {}
+}
+
+/* ------------------ ASSESSMENT TRACKER ------------------ */
+function showTracker() {
+  showScreen('trackerScreen');
+  updateTrackerDisplay();
+  drawTrackerChart();
+}
+
+function updateTrackerDisplay() {
+  const scores = state.assessmentScores || [];
+  const count = scores.length;
+  text('trackerCount', `${count} assessment${count === 1 ? '' : 's'}`);
+  
+  const history = byId('trackerHistory');
+  if (!history) return;
+  
+  if (count === 0) {
+    history.innerHTML = '<p style="opacity:0.7;text-align:center">No assessments completed yet</p>';
+    return;
+  }
+  
+  // Sort by date (most recent first)
+  const sortedScores = [...scores].sort((a, b) => b.date - a.date);
+  
+  let html = '';
+  sortedScores.forEach((score, index) => {
+    const date = new Date(score.date).toLocaleDateString();
+    const time = new Date(score.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    html += `
+      <div style="padding:8px;margin:4px 0;border-radius:8px;background:var(--muted2);display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <strong>${date} ${time}</strong>
+        </div>
+        <div>
+          <span style="color:var(--good)">Exact: ${score.exact}%</span> • 
+          <span style="color:var(--accent)">±1: ${score.nearMiss}%</span>
+        </div>
+      </div>
+    `;
+  });
+  
+  history.innerHTML = html;
+}
+
+function drawTrackerChart() {
+  const canvas = byId('trackerCanvas');
+  if (!canvas) return;
+  
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  
+  const P = {l: 56, r: 24, t: 16, b: 28};
+  const AX = P.l, AY = P.t, AW = W - P.l - P.r, AH = H - P.t - P.b;
+  
+  ctx.fillStyle = '#0b1224';
+  ctx.fillRect(0, 0, W, H);
+  
+  const scores = state.assessmentScores || [];
+  if (scores.length === 0) {
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text') || '#e5e7eb';
+    ctx.font = '14px Fredoka, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('No assessment data yet', W / 2, H / 2);
+    return;
+  }
+  
+  // Sort by date
+  const sortedScores = [...scores].sort((a, b) => a.date - b.date);
+  
+  const maxTests = Math.max(10, sortedScores.length);
+  const xScale = (i) => AX + (i / (maxTests - 1)) * AW;
+  const yScale = (pct) => AY + AH - (pct / 100) * AH;
+  
+  // Draw grid lines
+  ctx.strokeStyle = '#2a3a54';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 100; i += 20) {
+    const y = yScale(i);
+    ctx.beginPath();
+    ctx.moveTo(AX, y);
+    ctx.lineTo(AX + AW, y);
+    ctx.stroke();
+  }
+  
+  // Draw axes
+  ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--muted') || '#334155';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(AX, AY);
+  ctx.lineTo(AX, AY + AH);
+  ctx.lineTo(AX + AW, AY + AH);
+  ctx.stroke();
+  
+  // Draw Y-axis labels
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text') || '#e5e7eb';
+  ctx.font = '12px Fredoka, sans-serif';
+  ctx.textAlign = 'right';
+  for (let i = 0; i <= 100; i += 20) {
+    ctx.fillText(`${i}%`, AX - 8, yScale(i) + 4);
+  }
+  
+  if (sortedScores.length > 1) {
+    // Draw exact scores line
+    const exactColor = getComputedStyle(document.documentElement).getPropertyValue('--good') || '#16a34a';
+    ctx.beginPath();
+    ctx.strokeStyle = exactColor;
+    ctx.lineWidth = 3;
+    sortedScores.forEach((score, i) => {
+      const x = xScale(i);
+      const y = yScale(score.exact);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    
+    // Draw near-miss scores line
+    const nearMissColor = getComputedStyle(document.documentElement).getPropertyValue('--accent') || '#fbbf24';
+    ctx.beginPath();
+    ctx.strokeStyle = nearMissColor;
+    ctx.lineWidth = 3;
+    sortedScores.forEach((score, i) => {
+      const x = xScale(i);
+      const y = yScale(score.nearMiss);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  }
+  
+  // Draw data points
+  sortedScores.forEach((score, i) => {
+    const x = xScale(i);
+    
+    // Exact score point
+    ctx.beginPath();
+    ctx.arc(x, yScale(score.exact), 4, 0, Math.PI * 2);
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--good') || '#16a34a';
+    ctx.fill();
+    
+    // Near-miss score point
+    ctx.beginPath();
+    ctx.arc(x, yScale(score.nearMiss), 4, 0, Math.PI * 2);
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent') || '#fbbf24';
+    ctx.fill();
+  });
 }
 
 /* -------- Normal trials -------- */
@@ -1442,15 +1666,15 @@ function populatePitchSelect(){
 /* ------------------ TUTORIAL PAGER ------------------ */
 let tIndex = 0;
 function setTutorialPage(i){
-  tIndex = Math.max(0, Math.min(4, i));
-  ['tPage1','tPage2','tPage3','tPage4','tPage5'].forEach((id, idx)=>{
+  tIndex = Math.max(0, Math.min(5, i));
+  ['tPage1','tPage2','tPage3','tPage4','tPage5','tPage6'].forEach((id, idx)=>{
     const el = byId(id);
     if(el) el.classList.toggle('active', idx===tIndex);
   });
   const back = byId('tBack'); if(back) back.style.visibility = (tIndex===0 ? 'hidden' : 'visible');
-  const next = byId('tNext'); if(next) next.textContent = (tIndex===4 ? 'Got it' : 'Next ▶');
+  const next = byId('tNext'); if(next) next.textContent = (tIndex===5 ? 'Got it' : 'Next ▶');
 }
-function nextTutorial(){ if(tIndex<4){ setTutorialPage(tIndex+1); return; } hide('welcomeModal'); showScreen('menuScreen'); updateCapsUI(); populatePitchSelect(); drawChart(); }
+function nextTutorial(){ if(tIndex<5){ setTutorialPage(tIndex+1); return; } hide('welcomeModal'); showScreen('menuScreen'); updateCapsUI(); populatePitchSelect(); drawChart(); }
 function prevTutorial(){ setTutorialPage(tIndex-1); }
 
 /* ------------------ WIRING ------------------ */
@@ -1470,6 +1694,7 @@ function wireOnce(){
   // Menu
   safe('menuStart',   el=> el.onclick=()=> startSession());
   safe('startAssessment', el=> el.onclick=()=> startAssessment());
+  safe('viewTracker', el=> el.onclick=()=> showTracker());
   safe('playFlappy',  el=> el.onclick=()=> openFlappyFromMenu());
   safe('resetLockout',el=> el.onclick=()=>{
     if(!confirm('Reset lockout/timer now? This starts a fresh 20-minute window immediately.')) return;
@@ -1478,11 +1703,30 @@ function wireOnce(){
   });
   safe('menuReset',   el=> el.onclick=()=> doFactoryReset());
 
+  // Assessment warning modal
+  safe('btnProceedAssessment', el=> el.onclick=()=> proceedWithAssessment());
+  safe('btnCancelAssessment', el=> el.onclick=()=> cancelAssessment());
+  
+  // Assessment results modal
+  safe('btnRetakeAssessmentModal', el=> el.onclick=()=> {
+    byId('assessmentResultsModal').style.display = 'none';
+    proceedWithAssessment();
+  });
+  safe('btnBackMenuModal', el=> el.onclick=()=> {
+    byId('assessmentResultsModal').style.display = 'none';
+    showScreen('menuScreen'); 
+    populatePitchSelect(); 
+    drawChart();
+  });
+
   // Assessment screen
   safe('btnStartAssessment', el=> el.onclick=()=> beginAssessment());
   safe('btnBackMenuAssessment', el=> el.onclick=()=> { assessmentActive=false; showScreen('menuScreen'); populatePitchSelect(); drawChart(); });
   safe('btnRetryAssessment', el=> el.onclick=()=> { hide('assessmentResults'); beginAssessment(); });
   safe('btnBackMenuFromResults', el=> el.onclick=()=> { assessmentActive=false; showScreen('menuScreen'); populatePitchSelect(); drawChart(); });
+
+  // Tracker screen
+  safe('btnBackMenuTracker', el=> el.onclick=()=> { showScreen('menuScreen'); populatePitchSelect(); drawChart(); });
 
   // Set selector
   safe('setSizeSelect', sel=>{
