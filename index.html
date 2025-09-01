@@ -124,7 +124,7 @@
           <h3>🧪 Special exercises (Block 15)</h3>
           <ul>
             <li>When you’re learning <strong>≥ 5 pitches</strong>, Block 15 becomes specials:</li>
-            <li><strong>Exercise A</strong>: 12 trials with feedback — <em>Target (pitch)</em> vs <em>Other (OOB)</em>.</li>
+            <li><strong>Exercise A</strong>: 12 trials with feedback — <em>Target (pitch)</em> vs <em>Other (±2 semitones)</em>.</li>
             <li><strong>Exercise B</strong>: 22 trials without feedback — same task.</li>
           </ul>
         </div>
@@ -811,6 +811,17 @@ function currentOOBs(setSize){
   if(!learned.includes(dn2) && !learned.includes(dn1)) out.push(PC[dn2]);
   return out;
 }
+function getPlusMinusTwoSemitones(targetPc){
+  const targetIndex = PC2I[targetPc];
+  if (targetIndex === undefined) return [targetPc]; // fallback
+  
+  const pitches = [];
+  for (let offset = -2; offset <= 2; offset++) {
+    const index = (targetIndex + offset + 12) % 12;
+    pitches.push(PC[index]);
+  }
+  return pitches;
+}
 function currentOctaves(){ 
   if (state.audioType === AUDIO_TYPES.GUITAR) {
     return [3,4,5]; // Guitar uses C3-B5
@@ -894,7 +905,7 @@ function startSpecialAtBlock15(){
   special = {mode:'A', targetPc, total:12, done:0, withFeedback:true, correct:0};
   showSpecialUI(true, `Special A — focus: ${pcLabel(targetPc)}`);
   text('btnTarget', `Target (${pcLabel(targetPc)})`);
-  text('btnOther',  'Other (OOB)');
+  text('btnOther',  'Other (±2 semitones)');
   nextSpecialTrial(true);
   return true;
 }
@@ -912,9 +923,9 @@ function showSpecialUI(show, label){
 function nextSpecialTrial(){
   if(!special) return;
   const set=setFromIndex(state.levelIndex);
-  const oobs = currentOOBs(set);
-  const isTarget = Math.random()<0.5 || oobs.length===0;
-  const pitchPc = isTarget ? special.targetPc : (oobs.length ? rand(oobs) : rand(PC.filter(p=>p!==special.targetPc)));
+  const plusMinusTwoPitches = getPlusMinusTwoSemitones(special.targetPc);
+  const isTarget = Math.random()<0.5;
+  const pitchPc = isTarget ? special.targetPc : rand(plusMinusTwoPitches.filter(p => p !== special.targetPc));
   truePc = pitchPc; isOOBTrial = !isTarget;
   currentNote = `${pitchPc}${rand(currentOctaves())}`;
   playSample(currentNote);
