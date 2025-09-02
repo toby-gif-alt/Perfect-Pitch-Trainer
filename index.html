@@ -48,13 +48,15 @@
   #btnDismissSuggest{background:var(--muted)}
 
   /* Modals */
-  #strictModal,#welcomeModal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:1000;background:rgba(0,0,0,.55);pointer-events:auto}
-  #strictBox,#welcomeBox{width:min(760px,92vw);background:var(--card);border:1px solid var(--muted);border-radius:16px;padding:18px 20px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
-  #strictBox h3,#welcomeBox h2{margin:0 0 8px}
-  #strictBtns,#welcomeBtns{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
+  #strictModal,#welcomeModal,#newPitchModal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:1000;background:rgba(0,0,0,.55);pointer-events:auto}
+  #strictBox,#welcomeBox,#newPitchBox{width:min(760px,92vw);background:var(--card);border:1px solid var(--muted);border-radius:16px;padding:18px 20px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  #strictBox h3,#welcomeBox h2,#newPitchBox h2{margin:0 0 8px}
+  #strictBtns,#welcomeBtns,#newPitchBtns{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
   #btnStrictResume{background:var(--good)}
   #btnStrictMenu{background:var(--muted)}
   #welcomeBtns button{background:var(--muted)}
+  #btnHearNewPitch{background:var(--accent);color:var(--bg);font-weight:700}
+  #btnContinueTraining{background:var(--good)}
   #tutorialWrap{background:var(--card);border:1px solid var(--muted);border-radius:12px;padding:12px;margin:10px 0}
 
   /* Progress (charts) */
@@ -397,6 +399,18 @@
       <div id="strictBtns">
         <button id="btnStrictResume">Resume Training</button>
         <button id="btnStrictMenu">Go to Menu</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- New Pitch Introduction Modal -->
+  <div id="newPitchModal" aria-modal="true" role="dialog">
+    <div id="newPitchBox" class="card">
+      <h2>🎉 Well Done!</h2>
+      <p id="newPitchMessage">Now you are learning: <strong id="newPitchName">F</strong></p>
+      <div id="newPitchBtns">
+        <button id="btnHearNewPitch">🔊 Hear It</button>
+        <button id="btnContinueTraining">Continue</button>
       </div>
     </div>
   </div>
@@ -799,31 +813,44 @@ async function playMetronomeClick(){
     await resumeCtx();
     const ctx = getCtx();
     
-    // Create a short, sharp click sound resembling wooden metronome
+    // Create a more woody click sound
     const noise = ctx.createBufferSource();
-    const buffer = ctx.createBuffer(1, ctx.sampleRate * 0.1, ctx.sampleRate);
+    const buffer = ctx.createBuffer(1, ctx.sampleRate * 0.15, ctx.sampleRate);
     const data = buffer.getChannelData(0);
     
-    // Generate a sharp click with quick decay
+    // Generate a more wooden-sounding click with multiple frequency components
     for (let i = 0; i < data.length; i++) {
-      const decay = Math.pow(i / data.length, 3);
-      data[i] = (Math.random() * 2 - 1) * (1 - decay) * 0.1;
+      const t = i / ctx.sampleRate;
+      const decay = Math.exp(-t * 15); // Exponential decay for wood-like resonance
+      
+      // Mix of frequencies to simulate wood grain resonance
+      const lowFreq = Math.sin(2 * Math.PI * 200 * t) * 0.3;
+      const midFreq = Math.sin(2 * Math.PI * 800 * t) * 0.4; 
+      const highFreq = Math.sin(2 * Math.PI * 1200 * t) * 0.2;
+      const noise = (Math.random() * 2 - 1) * 0.1; // Small amount of noise for texture
+      
+      data[i] = (lowFreq + midFreq + highFreq + noise) * decay * 0.2;
     }
     
     noise.buffer = buffer;
     const g = ctx.createGain();
-    g.gain.value = 0.15;
+    g.gain.value = 0.2;
     
-    // Add some filtering to make it sound more "woody"
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.value = 1200;
-    filter.Q.value = 4;
+    // Add filtering to make it sound more woody and resonant
+    const lowpass = ctx.createBiquadFilter();
+    lowpass.type = 'lowpass';
+    lowpass.frequency.value = 2000;
+    lowpass.Q.value = 1.5;
     
-    noise.connect(filter).connect(g).connect(ctx.destination);
+    const bandpass = ctx.createBiquadFilter();
+    bandpass.type = 'bandpass';
+    bandpass.frequency.value = 800;
+    bandpass.Q.value = 3;
+    
+    noise.connect(bandpass).connect(lowpass).connect(g).connect(ctx.destination);
     const t = ctx.currentTime;
     noise.start(t);
-    noise.stop(t + 0.1);
+    noise.stop(t + 0.15);
   }catch(_e){}
 }
 
@@ -1437,7 +1464,7 @@ function restartCurrentSet(){
 function maybeSuggestRestart(){
   const block = blockFromIndex(state.levelIndex);
   if(block < 21){ state.testFailStreak = 0; hideSuggestBanner(); suggestedRestartFlag=false; save(); return; }
-  if(state.testFailStreak >= 4 && !suggestedRestartFlag){ suggestedRestartFlag = true; showSuggestBanner(); }
+  if(state.testFailStreak >= 10 && !suggestedRestartFlag){ suggestedRestartFlag = true; showSuggestBanner(); }
 }
 
 function recordTrial(guessLabel, ok, timeout=false, oobChosen=false){
@@ -1475,16 +1502,20 @@ function advanceCheck(){
     if(passed) {
       alert(`Well done, you passed with ${percentage}%!`);
     } else {
+      // Suppress strict modal during failure dialogs
+      suppressStrictOnce = true;
       alert(`Sorry you didn't make it with ${percentage}%.`);
       
-      // Check for 4-fail streak and show struggle suggestion
-      if(state.testFailStreak >= 4) {
+      // Check for 10-fail streak and show struggle suggestion
+      if(state.testFailStreak >= 10) {
         const confirmed = confirm(`Struggling? Perhaps go back to the start of set?\n\nClick OK to restart the set, or Cancel to dismiss and try again.`);
         if(confirmed) {
           restartCurrentSet();
           return;
         }
       }
+      // Keep suppression active after dialogs
+      suppressStrictOnce = true;
     }
   }
   
@@ -1504,9 +1535,17 @@ function advanceCheck(){
   }
   state.levelTrials=0; state.levelCorrect=0;
   if(passed && state.levelIndex<LEVELS_TOTAL){
+    const oldSet = setFromIndex(state.levelIndex);
     state.levelIndex++;
+    const newSet = setFromIndex(state.levelIndex);
     save(); updateLevelUI(); paintNotes();
-    startFlappyReward();
+    
+    // Check if we're moving to a new set (new pitch introduced)
+    if(newSet > oldSet && newSet <= UNLOCK_ORDER.length){
+      showNewPitchModal(newSet);
+    } else {
+      startFlappyReward();
+    }
   } else save();
 }
 
@@ -1815,6 +1854,16 @@ function wireOnce(){
   safe('btnStrictResume', el=> el.onclick=()=>{ closeStrictModal(); showScreen('trainerScreen'); });
   safe('btnStrictMenu',   el=> el.onclick=()=>{ closeStrictModal(); showScreen('menuScreen'); });
 
+  // New pitch modal buttons
+  safe('btnHearNewPitch', el=> el.onclick=async()=>{ 
+    const pitch = UNLOCK_ORDER[setFromIndex(state.levelIndex) - 1];
+    await playNewPitchDemo(pitch); 
+  });
+  safe('btnContinueTraining', el=> el.onclick=()=>{ 
+    closeNewPitchModal(); 
+    startFlappyReward(); 
+  });
+
   // Initial screen
   if(!state.userName){ showScreen('startScreen'); }
   else { safe('greeting', g=> g.textContent=`Hello ${state.userName}!`); showScreen('menuScreen'); updateCapsUI(); }
@@ -1958,6 +2007,33 @@ function detachFlappyControls(){
 let strictModalPending=false;
 function openStrictModal(){ if(suppressStrictOnce){ suppressStrictOnce=false; return; } showFlex('strictModal'); setTimeout(()=> byId('btnStrictResume')?.focus(), 0); }
 function closeStrictModal(){ hide('strictModal'); strictModalPending=false; }
+
+/* New Pitch Modal */
+function showNewPitchModal(setNumber){
+  const newPitch = UNLOCK_ORDER[setNumber - 1];
+  text('newPitchName', pcLabel(newPitch));
+  showFlex('newPitchModal');
+  setTimeout(()=> byId('btnHearNewPitch')?.focus(), 0);
+}
+function closeNewPitchModal(){
+  hide('newPitchModal');
+}
+async function playNewPitchDemo(pitch){
+  try{
+    await resumeCtx();
+    const octaves = currentOctaves();
+    
+    // Play the pitch slowly across all three octaves
+    for(let i = 0; i < octaves.length; i++){
+      const note = `${pitch}${octaves[i]}`;
+      await playSample(note);
+      // Wait 1.2 seconds between notes for slow demonstration  
+      await new Promise(resolve => setTimeout(resolve, 1200));
+    }
+  }catch(e){
+    report(e);
+  }
+}
 function reconcileAwayTime(){
   const now = Date.now();
   const rec = (state.sessions||[])[(state.sessions||[]).length - 1];
