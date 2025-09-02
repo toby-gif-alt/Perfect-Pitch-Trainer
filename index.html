@@ -37,9 +37,9 @@
 
   /* Flappy */
   #flappyModal{position:fixed;inset:0;background:rgba(0,0,0,.95);display:none;align-items:center;justify-content:center;z-index:50}
-  #flappyCanvas{background:var(--bg);width:100vw;height:100vh;border-radius:0;box-shadow:none;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;outline:none;position:fixed;top:0;left:0}
-  #flappyControls{position:fixed;top:20px;right:20px;z-index:51;display:flex;gap:10px;align-items:center}
-  #flappyScore{position:fixed;top:20px;left:20px;z-index:51;color:var(--text);font-size:18px;font-weight:600}
+  #flappyCanvas{background:var(--bg);width:100vw;height:100vh;border-radius:0;box-shadow:none;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;outline:none;position:fixed;top:0;left:0;-webkit-user-drag:none;-khtml-user-drag:none;-moz-user-drag:none;-o-user-drag:none}
+  #flappyControls{position:fixed;top:20px;right:20px;z-index:51;display:flex;gap:10px;align-items:center;user-select:none;-webkit-user-select:none}
+  #flappyScore{position:fixed;top:20px;left:20px;z-index:51;color:var(--text);font-size:18px;font-weight:600;user-select:none;-webkit-user-select:none}
 
   input[type="range"].disabled{opacity:.4;filter:grayscale(1)}
 
@@ -1969,13 +1969,14 @@ function drawStaffs(){
       ctx.stroke();
     }
     
-    // Draw treble clef symbol
+    // Draw treble clef symbol (using text)
     ctx.fillStyle = clefColor;
-    ctx.font = '40px serif';
-    ctx.fillText('𝄞', p.x + 5, staffTop + 30);
+    ctx.font = '32px serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('♪', p.x + 8, staffTop + 25);
     
     // Draw bass clef symbol
-    ctx.fillText('𝄢', p.x + 5, staffBottom + 30);
+    ctx.fillText('♫', p.x + 8, staffBottom + 25);
     
     // Draw meteors (obstacles)
     ctx.fillStyle = meteorColor;
@@ -1988,10 +1989,11 @@ function drawStaffs(){
     ctx.fill();
     
     // Add meteor trail
-    ctx.fillStyle = meteorColor + '66';
+    const trailColor = meteorColor + '80';
+    ctx.fillStyle = trailColor;
     for(let i = 1; i <= 3; i++) {
       ctx.beginPath();
-      ctx.arc(p.x + FLAPPY.width/2 + i*5, meteorY1 + i*2, 8-i*2, 0, Math.PI*2);
+      ctx.arc(p.x + FLAPPY.width/2 + i*5, meteorY1 + i*2, Math.max(1, 8-i*2), 0, Math.PI*2);
       ctx.fill();
     }
     
@@ -2002,17 +2004,17 @@ function drawStaffs(){
     ctx.fill();
     
     // Add meteor trail
-    ctx.fillStyle = meteorColor + '66';
+    ctx.fillStyle = trailColor;
     for(let i = 1; i <= 3; i++) {
       ctx.beginPath();
-      ctx.arc(p.x + FLAPPY.width/2 + i*5, meteorY2 - i*2, 8-i*2, 0, Math.PI*2);
+      ctx.arc(p.x + FLAPPY.width/2 + i*5, meteorY2 - i*2, Math.max(1, 8-i*2), 0, Math.PI*2);
       ctx.fill();
     }
   }
   
   // Draw ship line across the screen
   ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent')||'#fbbf24';
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 4;
   ctx.beginPath();
   ctx.moveTo(0, bird.y);
   ctx.lineTo(cnv.width, bird.y);
@@ -2061,11 +2063,14 @@ function step(ts){
   drawStaffs(); 
   drawNote();
   
-  if(bird.y < 0 || bird.y > cnv.height){ return closeFlappy(true); }
+  // Check bounds (allow more margin)
+  if(bird.y < -50 || bird.y > cnv.height + 50){ 
+    return closeFlappy(true); 
+  }
   
   // Check collision with meteors (more precise collision detection)
   for(const p of pipes){ 
-    if(bird.x+12>p.x && bird.x-12<p.x+FLAPPY.width){ 
+    if(bird.x + 15 > p.x && bird.x - 15 < p.x + FLAPPY.width){ 
       const meteorY1 = p.gapY - FLAPPY.gap/2 - 20;
       const meteorY2 = p.gapY + FLAPPY.gap/2 + 20;
       
@@ -2074,7 +2079,7 @@ function step(ts){
       // Check collision with bottom meteor  
       const dist2 = Math.sqrt(Math.pow(bird.x - (p.x + FLAPPY.width/2), 2) + Math.pow(bird.y - meteorY2, 2));
       
-      if(dist1 < 15 || dist2 < 15){ 
+      if(dist1 < 18 || dist2 < 18){ 
         return closeFlappy(true); 
       }
     } 
