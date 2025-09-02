@@ -807,50 +807,20 @@ async function playSample(note){
   }
 }
 
-/* Wooden metronome sound for Flappy Bird lockout */
-async function playMetronomeClick(){
+/* Flappy sound for Flappy Bird lockout */
+async function playFlappySound(){
   try{
     await resumeCtx();
     const ctx = getCtx();
-    
-    // Create a more woody click sound
-    const noise = ctx.createBufferSource();
-    const buffer = ctx.createBuffer(1, ctx.sampleRate * 0.15, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    
-    // Generate a more wooden-sounding click with multiple frequency components
-    for (let i = 0; i < data.length; i++) {
-      const t = i / ctx.sampleRate;
-      const decay = Math.exp(-t * 15); // Exponential decay for wood-like resonance
-      
-      // Mix of frequencies to simulate wood grain resonance
-      const lowFreq = Math.sin(2 * Math.PI * 200 * t) * 0.3;
-      const midFreq = Math.sin(2 * Math.PI * 800 * t) * 0.4; 
-      const highFreq = Math.sin(2 * Math.PI * 1200 * t) * 0.2;
-      const noise = (Math.random() * 2 - 1) * 0.1; // Small amount of noise for texture
-      
-      data[i] = (lowFreq + midFreq + highFreq + noise) * decay * 0.2;
-    }
-    
-    noise.buffer = buffer;
-    const g = ctx.createGain();
-    g.gain.value = 0.2;
-    
-    // Add filtering to make it sound more woody and resonant
-    const lowpass = ctx.createBiquadFilter();
-    lowpass.type = 'lowpass';
-    lowpass.frequency.value = 2000;
-    lowpass.Q.value = 1.5;
-    
-    const bandpass = ctx.createBiquadFilter();
-    bandpass.type = 'bandpass';
-    bandpass.frequency.value = 800;
-    bandpass.Q.value = 3;
-    
-    noise.connect(bandpass).connect(lowpass).connect(g).connect(ctx.destination);
+    const url = `${AUDIO_PIANO}/flappy.mp3`;
+    const buf = await loadBuffer(url);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const g = ctx.createGain(); 
+    g.gain.value = 0.8; // Set volume level
+    src.connect(g).connect(ctx.destination);
     const t = ctx.currentTime;
-    noise.start(t);
-    noise.stop(t + 0.15);
+    src.start(t);
   }catch(_e){}
 }
 
@@ -1894,7 +1864,7 @@ function openFlappyModal(){
       soundToggle.textContent = state.flappySoundEnabled ? '🔊 Sound On' : '🔇 Sound Off';
     }
     if (description) {
-      description.textContent = 'Tap/click (or Space) to flap. First tap starts — each flap makes a metronome click.';
+      description.textContent = 'Tap/click (or Space) to flap. First tap starts — each flap makes a flappy sound.';
     }
   } else {
     if (soundToggle) soundToggle.style.display = 'none';
@@ -1917,9 +1887,9 @@ function resetFlappy(){ const cnv=byId('flappyCanvas'); if(!cnv) return; bird={x
 function flap(){ 
   bird.vy = FLAPPY.flap; 
   
-  // Only play sound if enabled and use metronome sound for lockout
+  // Only play sound if enabled and use flappy sound for lockout
   if (state.flappySoundEnabled && isLocked()) {
-    playMetronomeClick();
+    playFlappySound();
   } else if (state.flappySoundEnabled && !isLocked()) {
     // Regular flappy bird with musical pitches
     const pc = rand(PC); 
