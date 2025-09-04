@@ -1360,6 +1360,7 @@ function guess(pc){
   const ok = (!isOOBTrial && pc === truePc);
   recordTrial(pc, ok, false, false);
   feedback(ok, ok ? undefined : (isOOBTrial ? 'Incorrect — Out of Bounds' : `Incorrect — ${pcLabel(truePc)}`));
+  currentNote = null; // Clear currentNote to prevent repeated guesses
   advanceCheck();
   scheduleAuto();
 }
@@ -1371,6 +1372,7 @@ function chooseOOB(){
   recordTrial('OOB', ok, false, true);
   const msg = ok ? undefined : `Incorrect — ${pcLabel(truePc)}`;
   feedback(ok, msg);
+  currentNote = null; // Clear currentNote to prevent repeated guesses
   advanceCheck();
   scheduleAuto();
 }
