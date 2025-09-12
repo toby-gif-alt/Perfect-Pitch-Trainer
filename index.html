@@ -182,7 +182,7 @@
       <button id="startAssessment">📊 Assessment Test</button>
       <button id="viewTracker">📊 Track</button>
       <button id="startWarmRecall">🔥 Warm Recall</button>
-      <button id="playFlappy">🐤 Flappy (lockout only)</button>
+      <button id="playFlappy">🐤 Flappy (breaks/lockout only)</button>
       <button id="menuReset">⟲ Reset (factory)</button>
     </div>
 
@@ -256,8 +256,9 @@
     <div class="card" id="recallCard" style="margin-top:14px">
       <h3>🎯 Recall History</h3>
       <div style="margin-bottom:8px">
-        <button id="btnExportRecall" style="background:var(--accent);color:var(--bg);font-weight:700;margin-right:8px">📄 Export Recall CSV</button>
-        <span style="opacity:0.7;font-size:13px">Today's cold/warm pitch recall results</span>
+        <!-- CSV export removed - recall data now shown on main tracker chart -->
+        <!-- <button id="btnExportRecall" style="background:var(--accent);color:var(--bg);font-weight:700;margin-right:8px">📄 Export Recall CSV</button> -->
+        <span style="opacity:0.7;font-size:13px">Today's cold/warm pitch recall results (also shown on tracker chart)</span>
       </div>
       <div id="recallHistoryToday" style="border:1px solid var(--muted);border-radius:12px;padding:12px;background:var(--card);min-height:80px">
         <p id="recallHistoryEmpty" style="opacity:0.7;text-align:center;margin:20px 0">No recall data for today</p>
@@ -283,6 +284,18 @@
       </div>
       <canvas id="progressCanvas" width="1000" height="300" style="width:100%;height:auto;border-radius:12px;background:var(--card);border:1px solid var(--muted)"></canvas>
     </div>
+
+    <!-- Pitch Recall Chart -->
+    <section id="recall-progress-card" class="card" style="margin-top:14px">
+      <header><h3>🎯 Pitch Recall (Cold / Warm)</h3></header>
+      <div class="pc-chip-row" id="recall-pitch-chips" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"></div>
+      <canvas id="recall-progress-chart" width="1000" height="300" style="width:100%;height:auto;border-radius:12px;background:var(--card);border:1px solid var(--muted)"></canvas>
+      <div class="mini-legend" style="display:flex;gap:12px;align-items:center;font-size:13px;opacity:.9;margin-top:8px">
+        <span class="dot" style="width:12px;height:12px;border-radius:50%;background:#3b82f6"></span> Cold
+        <span class="dot" style="width:12px;height:12px;border-radius:50%;background:#eab308;margin-left:12px"></span> Warm
+        <span id="recall-latest" style="margin-left:12px;font-weight:600"></span>
+      </div>
+    </section>
   </div>
 
   <!-- Assessment Tracker Screen -->
@@ -294,9 +307,11 @@
     </div>
     
     <div style="margin:20px 0">
-      <div id="trackerLegend" style="display:flex;gap:12px;align-items:center;font-size:13px;opacity:.9;margin-bottom:12px">
+      <div id="trackerLegend" style="display:flex;gap:12px;align-items:center;font-size:13px;opacity:.9;margin-bottom:12px;flex-wrap:wrap">
         <span class="legendDot" style="background:var(--good)"></span> <span>Exact Correct %</span>
         <span class="legendDot" style="background:var(--accent);margin-left:12px"></span> <span>Within ±1 semitone %</span>
+        <span class="legendDot" style="background:#3b82f6;margin-left:12px"></span> <span>Cold Recall %</span>
+        <span class="legendDot" style="background:#eab308;margin-left:12px"></span> <span>Warm Recall %</span>
       </div>
       <canvas id="trackerCanvas" width="1000" height="300" style="width:100%;height:auto;border-radius:12px;background:var(--card);border:1px solid var(--muted)"></canvas>
     </div>
@@ -1245,10 +1260,15 @@ if (!state.session) {
 }
 
 if (!state.daily) {
+  const ymd = todaysLocalYmd();
   state.daily = {
+    ymd,
     date: getTodayDateString(), // YYYY-MM-DD format
     minutesCompleted: 0,        // total minutes completed today (0..30)
-    completedAt: null           // timestamp when 30 min reached, null if not complete
+    completedAt: null,          // timestamp when 30 min reached, null if not complete
+    didCold: false,            // daily cold recall completion flag
+    didWarm: false,            // daily warm recall completion flag
+    recall: []                 // recall results for today
   };
   save();
 }
@@ -1296,12 +1316,29 @@ if (typeof state.warmRecallPending === 'undefined') {
   save();
 }
 
-// Reset daily progress if date has changed (date rollover)
+// Migration for daily recall tracking flags
+if (state.daily && (typeof state.daily.didCold === 'undefined' || typeof state.daily.didWarm === 'undefined')) {
+  const ymd = todaysLocalYmd();
+  state.daily.ymd = ymd;
+  state.daily.didCold = false;
+  state.daily.didWarm = false;
+  if (!state.daily.recall) {
+    state.daily.recall = [];
+  }
+  save();
+}
+
+// Reset daily progress if date has changed (date rollover)  
 if (state.daily && state.daily.date !== getTodayDateString()) {
+  const ymd = todaysLocalYmd();
   state.daily = {
+    ymd,
     date: getTodayDateString(),
     minutesCompleted: 0,
-    completedAt: null
+    completedAt: null,
+    didCold: false,
+    didWarm: false,
+    recall: []
   };
   // Reset session state on date rollover
   state.session = {
@@ -1320,6 +1357,21 @@ if (state.daily && state.daily.date !== getTodayDateString()) {
       state.timbre.rotationIndex = (state.timbre.rotationIndex + 1) % state.timbre.altPool.length;
     }
   }
+  save();
+}
+
+// Migration for UI state for recall chart
+if (!state.ui) {
+  state.ui = {};
+  save();
+}
+
+// Initialize recall chart UI state
+if (!state.ui.recallPitch) {
+  // Default to first trained pitch if any exist, otherwise 'A'
+  const currentSet = setFromIndex(state.levelIndex);
+  const trainedPitches = trainedSet(currentSet);
+  state.ui.recallPitch = trainedPitches.length > 0 ? trainedPitches[0] : 'A';
   save();
 }
 
@@ -1664,6 +1716,21 @@ function getTodayDateString() {
   return new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD format in local time
 }
 
+// Helper function for daily cold recall system
+function todaysLocalYmd() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+// Fix B.1: Helper function to get next local midnight as ISO string
+function nextLocalMidnightISO() {
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0); // Set to midnight
+  return tomorrow.toISOString();
+}
+
 /* ------------------ DAILY SESSION MANAGEMENT ------------------ */
 let sessionTimer = null;
 
@@ -1750,6 +1817,8 @@ function updateAllTimerUI() {
       state.daily.minutesCompleted = Math.floor(elapsed / 60000);
       if (state.daily.minutesCompleted >= 30 && !state.daily.completedAt) {
         state.daily.completedAt = Date.now();
+        // Fix B.1: Set lockoutUntil when session completes (30 minutes reached)
+        state.session.lockoutUntil = nextLocalMidnightISO();
       }
     }
     
@@ -1883,6 +1952,9 @@ function completeDailySession() {
   // Session fully complete - 30 minutes done
   state.daily.completedAt = Date.now();
   state.daily.minutesCompleted = 30;
+  
+  // Fix B.1: Set lockoutUntil when session completes (30 minutes reached)
+  state.session.lockoutUntil = nextLocalMidnightISO();
   
   // Stop session timer
   if (sessionTimer) {
@@ -2609,7 +2681,22 @@ function updateCapsUI(){
     else lp.style.display='none';
   }
   
-  const pf = byId('playFlappy'); if(pf) pf.disabled = !(locked || isDailyLocked());
+  // Fix B.2: Compute new gating flag for flappy availability  
+  const inBreak = !!state.session.inBreak;
+  const isLockedOut = !!state.session.lockoutUntil && (Date.now() < new Date(state.session.lockoutUntil).getTime());
+  const canPlayFlappy = inBreak || isLockedOut;
+
+  const pf = byId('playFlappy'); 
+  if(pf) {
+    pf.disabled = !canPlayFlappy;
+    // Fix B.3: Update button text and message as specified
+    if (canPlayFlappy) {
+      pf.textContent = '🐤 Play Flappy';
+    } else {
+      pf.textContent = '🐤 Flappy (unavailable)';
+      // Note: Alert message is handled in openFlappyFromMenu() with exact text from spec
+    }
+  }
   
   // Update warm recall button state
   const wr = byId('startWarmRecall'); 
@@ -2728,19 +2815,16 @@ async function preloadFlappyAudio() {
 }
 
 // E) Flappy sound function
-function playFlappySound() {
+async function playFlappySound() {
   if (state.flappyMuted) return;
   
   try {
-    const ctx = getCtx();
-    if (FLAPPY_AUDIO_BUFFER) {
-      const src = ctx.createBufferSource();
-      src.buffer = FLAPPY_AUDIO_BUFFER;
-      const g = ctx.createGain(); 
-      g.gain.value = 0.5; // Reasonable volume
-      src.connect(g).connect(ctx.destination);
-      src.start();
-    }
+    const url = 'audio/flappy.mp3'; // existing asset
+    const buf = await loadBuffer(url); // reuse existing loader
+    const src = getCtx().createBufferSource();
+    src.buffer = buf; 
+    src.connect(getCtx().destination); 
+    src.start();
   } catch (e) {
     console.warn('Could not play flappy sound:', e);
   }
@@ -3195,6 +3279,15 @@ function closeMicrophone() {
 function getTodayKey() {
   const today = new Date();
   return today.toISOString().split('T')[0]; // YYYY-MM-DD format
+}
+
+// Calculate recall accuracy percentage from signed cents error
+function recallAccPct(centsErr) {
+  const a = Math.abs(centsErr);
+  if (a <= 5) return 100;             // perfect window
+  const MAX = 600;                     // tritone = "most opposite"
+  const pct = 100 * (1 - (a - 5)/(MAX - 5));
+  return Math.max(0, Math.min(100, Math.round(pct)));
 }
 
 // Get trained pitch classes for current session
@@ -3932,6 +4025,18 @@ function startRecallReview() {
   // Save all results to state
   for (const take of currentRecallSession.takes) {
     saveRecallData(currentRecallSession.type, take);
+    
+    // Add to analytics series for Progress tracker
+    state.analytics ||= {};
+    state.analytics.recallSeries ||= [];
+    state.analytics.recallSeries.push({
+      date: new Date().toISOString(),
+      day: state.daily?.ymd,
+      tag: currentRecallSession.type,     // 'cold' or 'warm'
+      pc: take.pc,                        // 'A','Bb',...
+      cents: take.medianCents,            // signed median cents error
+      accPct: recallAccPct(take.medianCents)
+    });
   }
   
   renderRecallReviewPhase();
@@ -3995,35 +4100,144 @@ function renderRecallReviewPhase() {
           ${reviewContent}
         </div>
       </div>
-      <div style="display:flex;justify-content:space-between;gap:12px">
-        <button id="btnRecallPrev" style="background:var(--muted)" 
+      <div style="display:flex;justify-content:space-between;gap:12px;pointer-events:auto">
+        <button data-recall-action="prev" style="background:var(--muted);pointer-events:auto" 
           ${reviewIndex === 0 ? 'disabled' : ''}>◀ Back</button>
         <div style="flex:1"></div>
-        <button id="btnRecallNext" style="background:var(--good)">
+        <button data-recall-action="next" style="background:var(--good);pointer-events:auto">
           ${reviewIndex < reviewItems.length - 1 ? 'Next ▶' : 'Done'}
+        </button>
+        <button data-recall-action="finish" style="background:var(--accent);color:var(--bg);font-weight:700;margin-left:8px;display:none;pointer-events:auto">
+          Finish
         </button>
       </div>
     </div>
   `;
   
-  // 4) Wire Next/Back buttons to increment/decrement reviewIndex and call updateRecallReviewUI
-  safe('btnRecallPrev', el => el.onclick = () => {
-    if (state.recall.reviewIndex > 0) {
-      state.recall.reviewIndex--;
-      currentRecallSession.reviewIndex = state.recall.reviewIndex; // Keep in sync
+  // Set up delegated click handlers for recall buttons (avoid stale handlers)
+  setupRecallDelegatedHandlers(modal);
+}
+
+// Fix A.1: Set up delegated click handlers for recall buttons (avoid stale handlers)
+function setupRecallDelegatedHandlers(modal) {
+  // Remove any existing handlers to avoid duplicates
+  modal.removeEventListener('click', handleRecallDelegatedClick);
+  
+  // Add single delegated handler
+  modal.addEventListener('click', handleRecallDelegatedClick);
+}
+
+function handleRecallDelegatedClick(e) {
+  const btn = e.target.closest('[data-recall-action]');
+  if (!btn) return;
+  
+  const action = btn.dataset.recallAction; // 'next' | 'prev' | 'finish'
+  if (!currentRecallSession) return;
+  
+  const reviewItems = state.recall.review || currentRecallSession.takes;
+  const currentIndex = state.recall.reviewIndex !== undefined ? state.recall.reviewIndex : currentRecallSession.reviewIndex;
+  
+  if (action === 'prev') {
+    if (currentIndex > 0) {
+      state.recall.reviewIndex = currentIndex - 1;
+      currentRecallSession.reviewIndex = state.recall.reviewIndex;
       updateRecallReviewContent();
     }
-  });
-  
-  safe('btnRecallNext', el => el.onclick = () => {
-    if (state.recall.reviewIndex < reviewItems.length - 1) {
-      state.recall.reviewIndex++;
-      currentRecallSession.reviewIndex = state.recall.reviewIndex; // Keep in sync
+  } else if (action === 'next') {
+    if (currentIndex < reviewItems.length - 1) {
+      state.recall.reviewIndex = currentIndex + 1;
+      currentRecallSession.reviewIndex = state.recall.reviewIndex;
       updateRecallReviewContent();
     } else {
+      // Last item → show final summary or finish
       finishRecallReview();
     }
-  });
+  } else if (action === 'finish') {
+    // Fix A.2: Persist results if not already persisted
+    persistRecallResults(currentRecallSession);
+    closeRecallUI();
+  }
+}
+
+// Fix A.2: Implement persistRecallResults to save to state.daily.recall
+function persistRecallResults(recallSession) {
+  if (!recallSession || !recallSession.takes) return;
+  
+  const todayISO = getTodayDateString();
+  
+  // Initialize state.daily if needed
+  if (!state.daily) {
+    state.daily = {
+      date: todayISO,
+      minutesCompleted: 0,
+      completedAt: null,
+      recall: []
+    };
+  }
+  
+  // Initialize recall array if needed
+  if (!state.daily.recall) {
+    state.daily.recall = [];
+  }
+  
+  // Guard against duplicate pushing - check if this tag+date already exists
+  const existingEntry = state.daily.recall.find(entry => 
+    entry.date === todayISO && entry.tag === recallSession.type
+  );
+  
+  if (existingEntry) {
+    console.log(`Recall results for ${recallSession.type} on ${todayISO} already persisted`);
+    return;
+  }
+  
+  // Initialize analytics if needed
+  state.analytics = state.analytics || {};
+  state.analytics.recallSeries = state.analytics.recallSeries || [];
+  
+  // Add each result to state.daily.recall and tracker
+  for (const result of recallSession.takes) {
+    if (result.analysis) {
+      // Save to daily recall data
+      state.daily.recall.push({
+        date: todayISO,
+        tag: recallSession.type, // 'cold' or 'warm'
+        pc: result.pitchClass,
+        medianCents: result.analysis.medianCents,
+        sdCents: result.analysis.sdCents,
+        verdict: result.analysis.verdict
+      });
+      
+      // Compute accuracy and save to tracker
+      const accPct = recallAccPct(result.analysis.medianCents);
+      state.analytics.recallSeries.push({
+        date: new Date().toISOString(),
+        day: state.daily.ymd,
+        tag: recallSession.type,              // 'cold' or 'warm'
+        pc: result.pitchClass,
+        accPct,
+        cents: result.analysis.medianCents
+      });
+    }
+  }
+  
+  save();
+  console.log(`Persisted ${recallSession.takes.length} recall results for ${recallSession.type}`);
+}
+
+function closeRecallUI() {
+  // Hide both cold and warm recall modals
+  const coldModal = byId('coldRecallModal');
+  const warmModal = byId('warmRecallModal');
+  
+  if (coldModal) coldModal.style.display = 'none';
+  if (warmModal) warmModal.style.display = 'none';
+  
+  // Clear current session
+  currentRecallSession = null;
+  
+  // Return to main menu
+  showScreen('menuScreen');
+  updateCapsUI();
 }
 
 // Update only the content and button states without recreating the DOM
@@ -4064,6 +4278,25 @@ function updateRecallReviewContent() {
   if (nextBtn) {
     nextBtn.textContent = reviewIndex < reviewItems.length - 1 ? 'Next ▶' : 'Done';
   }
+  
+  // Re-attach event handlers to ensure buttons work after content updates
+  safe('btnRecallPrev', el => el.onclick = () => {
+    if (state.recall.reviewIndex > 0) {
+      state.recall.reviewIndex--;
+      currentRecallSession.reviewIndex = state.recall.reviewIndex; // Keep in sync
+      updateRecallReviewContent();
+    }
+  });
+  
+  safe('btnRecallNext', el => el.onclick = () => {
+    if (state.recall.reviewIndex < reviewItems.length - 1) {
+      state.recall.reviewIndex++;
+      currentRecallSession.reviewIndex = state.recall.reviewIndex; // Keep in sync
+      updateRecallReviewContent();
+    } else {
+      finishRecallReview();
+    }
+  });
 }
 
 // Generate review content with three-note gauge
@@ -4157,6 +4390,14 @@ function finishRecallReview() {
   
   // Update display
   updateRecallDisplay();
+  
+  // Set completion flags
+  if (currentRecallSession.type === 'cold') {
+    state.daily.didCold = true;
+  } else {
+    state.daily.didWarm = true;
+  }
+  save();
   
   // Close modal and continue
   if (currentRecallSession.type === 'cold') {
@@ -5157,7 +5398,7 @@ function selectOobOctaveWithParity(trainedSet) {
 
 /* ------------------ OCTAVE MIX HYBRID GATED POLICY ------------------ */
 
-// Select octave for in-bounds trials using current mix + per-note overrides
+// Select octave for in-bounds trials using current mix consumption (Task B)
 function selectOctaveForInBounds(pc) {
   if (!state.oct) {
     return rand(currentOctaves());
@@ -5190,21 +5431,12 @@ function selectOctaveForInBounds(pc) {
     }
   }
   
-  // Sample from the adjusted mix
-  const rand = Math.random();
-  let cumulative = 0;
+  // Task B: Consume octave mix using the specified pseudocode
+  const R = Math.random();
+  const oct = R < adjustedMix['3'] ? 3 : (R < adjustedMix['3'] + adjustedMix['4'] ? 4 : 5);
   
-  for (const oct of state.oct.allowed) {
-    cumulative += adjustedMix[oct] || 0;
-    if (rand <= cumulative) {
-      console.log(`🎵 Selected octave ${oct} for in-bounds ${pc} (rand=${rand.toFixed(3)}, mix=${JSON.stringify(adjustedMix)})`);
-      return oct;
-    }
-  }
-  
-  // Fallback to center octave
-  console.log(`🎵 Fallback to center octave ${state.oct.center} for ${pc}`);
-  return state.oct.center;
+  console.log(`🎵 Selected octave ${oct} for in-bounds ${pc} (R=${R.toFixed(3)}, mix=${JSON.stringify(adjustedMix)})`);
+  return oct;
 }
 
 // Select octave for OOB trials (mirrors in-bounds currentMix)
@@ -5951,19 +6183,38 @@ function drawTrackerChart() {
   ctx.fillRect(0, 0, W, H);
   
   const scores = state.assessmentScores || [];
-  if (scores.length === 0) {
+  const recallSeries = state.analytics?.recallSeries || [];
+  
+  if (scores.length === 0 && recallSeries.length === 0) {
     ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text') || '#e5e7eb';
     ctx.font = '14px Fredoka, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('No assessment data yet', W / 2, H / 2);
+    ctx.fillText('No assessment or recall data yet', W / 2, H / 2);
     return;
   }
   
-  // Sort by date
+  // Sort assessment scores by date
   const sortedScores = [...scores].sort((a, b) => a.date - b.date);
   
-  const maxTests = Math.max(10, sortedScores.length);
-  const xScale = (i) => AX + (i / (maxTests - 1)) * AW;
+  // Build cold and warm recall arrays sorted by date
+  const coldRecall = recallSeries.filter(p => p.tag === 'cold').sort((a, b) => new Date(a.date) - new Date(b.date));
+  const warmRecall = recallSeries.filter(p => p.tag === 'warm').sort((a, b) => new Date(a.date) - new Date(b.date));
+  
+  // Find the range of all data points for x-axis scaling
+  const allDataPoints = [
+    ...sortedScores.map(s => s.date),
+    ...coldRecall.map(r => new Date(r.date).getTime()),
+    ...warmRecall.map(r => new Date(r.date).getTime())
+  ].sort();
+  
+  const maxTests = Math.max(10, allDataPoints.length);
+  const xScale = (date) => {
+    if (allDataPoints.length <= 1) return AX + AW / 2;
+    const minDate = allDataPoints[0];
+    const maxDate = allDataPoints[allDataPoints.length - 1];
+    if (maxDate === minDate) return AX + AW / 2;
+    return AX + ((date - minDate) / (maxDate - minDate)) * AW;
+  };
   const yScale = (pct) => AY + AH - (pct / 100) * AH;
   
   // Draw grid lines
@@ -5994,6 +6245,7 @@ function drawTrackerChart() {
     ctx.fillText(`${i}%`, AX - 8, yScale(i) + 4);
   }
   
+  // Draw assessment scores lines (if more than 1 point)
   if (sortedScores.length > 1) {
     // Draw exact scores line
     const exactColor = getComputedStyle(document.documentElement).getPropertyValue('--good') || '#16a34a';
@@ -6001,7 +6253,7 @@ function drawTrackerChart() {
     ctx.strokeStyle = exactColor;
     ctx.lineWidth = 3;
     sortedScores.forEach((score, i) => {
-      const x = xScale(i);
+      const x = xScale(score.date);
       const y = yScale(score.exact);
       if (i === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
@@ -6014,7 +6266,7 @@ function drawTrackerChart() {
     ctx.strokeStyle = nearMissColor;
     ctx.lineWidth = 3;
     sortedScores.forEach((score, i) => {
-      const x = xScale(i);
+      const x = xScale(score.date);
       const y = yScale(score.nearMiss);
       if (i === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
@@ -6022,9 +6274,37 @@ function drawTrackerChart() {
     ctx.stroke();
   }
   
-  // Draw data points
+  // Draw cold recall line (blue)
+  if (coldRecall.length > 1) {
+    ctx.beginPath();
+    ctx.strokeStyle = '#3b82f6'; // Blue
+    ctx.lineWidth = 3;
+    coldRecall.forEach((point, i) => {
+      const x = xScale(new Date(point.date).getTime());
+      const y = yScale(point.accPct);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  }
+  
+  // Draw warm recall line (yellow)
+  if (warmRecall.length > 1) {
+    ctx.beginPath();
+    ctx.strokeStyle = '#eab308'; // Yellow
+    ctx.lineWidth = 3;
+    warmRecall.forEach((point, i) => {
+      const x = xScale(new Date(point.date).getTime());
+      const y = yScale(point.accPct);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  }
+  
+  // Draw assessment data points
   sortedScores.forEach((score, i) => {
-    const x = xScale(i);
+    const x = xScale(score.date);
     
     // Exact score point
     ctx.beginPath();
@@ -6036,6 +6316,26 @@ function drawTrackerChart() {
     ctx.beginPath();
     ctx.arc(x, yScale(score.nearMiss), 4, 0, Math.PI * 2);
     ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent') || '#fbbf24';
+    ctx.fill();
+  });
+  
+  // Draw cold recall points (blue circular markers)
+  coldRecall.forEach(point => {
+    const x = xScale(new Date(point.date).getTime());
+    const y = yScale(point.accPct);
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = '#3b82f6'; // Blue
+    ctx.fill();
+  });
+  
+  // Draw warm recall points (yellow circular markers)
+  warmRecall.forEach(point => {
+    const x = xScale(new Date(point.date).getTime());
+    const y = yScale(point.accPct);
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = '#eab308'; // Yellow
     ctx.fill();
   });
 }
@@ -6084,8 +6384,8 @@ async function nextTrial(forceNew=false){
         detuneMode = 'oob'; 
         jlLevel = null;
         
-        // Use octave parity mirroring for OOB trials
-        chosenOctave = selectOctaveForOOB(truePc);
+        // Task B: OOB mirrors the same octave as the in-bounds trial
+        chosenOctave = state.lastInBoundsOctave || selectOctaveForOOB(truePc);
         currentNote = `${truePc}${chosenOctave}`;
       } else {
         // in-bounds: call chooseDetuneMode(truePc) and assign cents/mode/jlLevel
@@ -6096,16 +6396,19 @@ async function nextTrial(forceNew=false){
         
         chosenOctave = selectOctaveForInBounds(truePc);
         currentNote = `${truePc}${chosenOctave}`;
+        
+        // Task B: Store selected octave for next OOB trial
+        state.lastInBoundsOctave = chosenOctave;
       }
       
       // C) Freeze in state.current (REQUIRED for grading)
       state.meta.trialSeq = (state.meta.trialSeq || 0) + 1;
-      // Select timbre for this trial
+      // Task B: Select timbre for this trial with mirroring
       const selectedTimbre = plannedOOB && state.lastInBoundsTimbre ? 
         state.lastInBoundsTimbre : // OOB mirrors in-bounds timbre
         selectTimbreForTrial(truePc); // Normal selection
       
-      // Store selected timbre for next OOB trial
+      // Task B: Store selected timbre for next OOB trial
       if (!plannedOOB) {
         state.lastInBoundsTimbre = selectedTimbre;
       }
@@ -6488,14 +6791,18 @@ function initiateTrainingSession(){
     showScreen('menuScreen'); return;
   }
   
-  // Check if cold recall has been done today
-  const todayKey = getTodayKey();
-  const todayRecall = state.recall[todayKey];
+  // Ensure daily flags are properly initialized
+  const ymd = todaysLocalYmd();
+  state.daily = state.daily || {};
+  if (state.daily.ymd !== ymd) {
+    state.daily = { ymd, didCold: false, didWarm: false, recall: [] };
+    // DO NOT touch training timers/lockout here.
+  }
   
-  if (!todayRecall || !todayRecall.cold || todayRecall.cold.length === 0) {
-    // Show cold recall modal before starting training
+  // Gate training start on Cold Recall (once per day)
+  if (!state.daily.didCold) {
     showColdRecall();
-    return;
+    return; // training begins after cold finishes
   }
   
   // Cold recall already done, proceed with training
@@ -7067,14 +7374,21 @@ window.chooseDetuneMode = chooseDetuneMode;
 
 // Select detune mode and value for a trial
 function selectDetune(pc, isOOB) {
-  // OOB trials always get no detune
+  // Fix C.1: OOB micro-detune only (±5¢), no probes
   if (isOOB) {
+    // Micro detune around 0 with clamp
+    const g = (Math.random() * 2 - 1) * 3; // Simple uniform: -3 to +3 base range
+    const cents = Math.max(-5, Math.min(5, g)); // Clamp ±5¢
     return {
-      cents: 0,
+      cents: cents,
       mode: 'oob',
-      jlLevel: null
+      jlLevel: null,
+      reason: 'oob'
     };
   }
+  
+  // NOTE: OOB does NOT route into boundary probe logic at all.
+  // Keep existing in-bounds jitter/probe code unchanged below.
   
   // Get jitter level and choose mode
   const level = getJitterLevel(pc);
@@ -7262,8 +7576,217 @@ function populatePitchSelect(){
   sel.onchange = ()=> drawChart();
   const gran = byId('granularitySelect'); if(gran){ gran.onchange = ()=> drawChart(); gran.value='WEEKLY'; }
   
+  // Render recall chart components
+  renderRecallPitchChips();
+  drawRecallChart();
+  
   // Update variety mode UI when menu is shown
   updateVarietyModeUI();
+}
+
+/* ------------------ RECALL CHART FUNCTIONS ------------------ */
+
+// Accuracy mapping function for recall (reuse existing if available)
+function recallAccPct(centsErr) {
+  const a = Math.abs(centsErr);
+  if (a <= 5) return 100;
+  const MAX = 600; // tritone boundary
+  const pct = 100 * (1 - (a - 5)/(MAX - 5));
+  return Math.max(0, Math.min(100, Math.round(pct)));
+}
+
+// Render pitch class chips for recall chart
+function renderRecallPitchChips() {
+  const container = byId('recall-pitch-chips');
+  if (!container) return;
+  
+  container.innerHTML = '';
+  const allPCs = ['A', 'Bb', 'B', 'C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab'];
+  
+  // Get currently trained pitches for visual highlighting
+  const currentSet = setFromIndex(state.levelIndex);
+  const trainedPitches = trainedSet(currentSet);
+  
+  allPCs.forEach(pc => {
+    const chip = document.createElement('button');
+    chip.textContent = pcLabel(pc);
+    chip.style.cssText = 'padding:6px 12px;margin:0;border-radius:16px;border:1px solid var(--muted);font-size:12px;cursor:pointer;';
+    
+    // Highlight if trained
+    if (trainedPitches.includes(pc)) {
+      chip.style.background = 'var(--muted)';
+      chip.style.color = 'var(--text)';
+    } else {
+      chip.style.background = 'var(--muted2)';
+      chip.style.color = 'var(--neutral)';
+    }
+    
+    // Highlight if selected
+    if (pc === state.ui.recallPitch) {
+      chip.style.background = 'var(--accent)';
+      chip.style.color = 'var(--bg)';
+      chip.style.fontWeight = '600';
+    }
+    
+    chip.onclick = () => {
+      state.ui.recallPitch = pc;
+      save();
+      renderRecallPitchChips(); // Re-render chips
+      drawRecallChart(); // Re-draw chart
+    };
+    
+    container.appendChild(chip);
+  });
+}
+
+// Draw the recall chart
+function drawRecallChart() {
+  const canvas = byId('recall-progress-chart');
+  if (!canvas) return;
+  
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  
+  const P = {l: 56, r: 24, t: 16, b: 28};
+  const AX = P.l, AY = P.t, AW = W - P.l - P.r, AH = H - P.t - P.b;
+  
+  // Colors
+  const colCard = getComputedStyle(document.documentElement).getPropertyValue('--card') || '#1e293b';
+  const colMuted = getComputedStyle(document.documentElement).getPropertyValue('--muted') || '#334155';
+  const colText = getComputedStyle(document.documentElement).getPropertyValue('--text') || '#e5e7eb';
+  const colBlue = '#3b82f6'; // Cold
+  const colYellow = '#eab308'; // Warm
+  
+  ctx.fillStyle = colCard;
+  ctx.fillRect(0, 0, W, H);
+  
+  // Get recall data for selected pitch
+  const selectedPc = state.ui.recallPitch || 'A';
+  const rows = (state.analytics?.recallSeries || []).filter(p => p.pc === selectedPc);
+  
+  if (rows.length === 0) {
+    // Show empty state
+    ctx.fillStyle = colText;
+    ctx.font = '14px Fredoka, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`No recall data for ${pcLabel(selectedPc)} yet.`, W / 2, H / 2);
+    // Clear latest values when no data
+    updateRecallLatestValues([], [], selectedPc);
+    return;
+  }
+  
+  // Filter and limit to last 30 entries per series
+  const cold = rows.filter(p => p.tag === 'cold').slice(-30);
+  const warm = rows.filter(p => p.tag === 'warm').slice(-30);
+  
+  if (cold.length === 0 && warm.length === 0) {
+    ctx.fillStyle = colText;
+    ctx.font = '14px Fredoka, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`No recall data for ${pcLabel(selectedPc)} yet.`, W / 2, H / 2);
+    // Clear latest values when no data
+    updateRecallLatestValues([], [], selectedPc);
+    return;
+  }
+  
+  // Combine data points for x-axis scaling
+  const allPoints = [...cold, ...warm];
+  const dates = allPoints.map(p => new Date(p.date).getTime()).sort();
+  const minDate = dates[0];
+  const maxDate = dates[dates.length - 1];
+  const dateRange = maxDate - minDate || 86400000; // At least 1 day range
+  
+  // Scales
+  const xScale = (date) => AX + ((date - minDate) / dateRange) * AW;
+  const yScale = (pct) => AY + AH - (pct / 100) * AH;
+  
+  // Draw Y grid and labels
+  ctx.strokeStyle = colMuted;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let y = 0; y <= 100; y += 20) {
+    const yPos = yScale(y);
+    ctx.moveTo(AX, yPos);
+    ctx.lineTo(AX + AW, yPos);
+  }
+  ctx.stroke();
+  
+  ctx.fillStyle = colText;
+  ctx.font = '12px system-ui,sans-serif';
+  ctx.textAlign = 'right';
+  for (let y = 0; y <= 100; y += 20) {
+    const yPos = yScale(y) + 4;
+    ctx.fillText(String(y) + '%', AX - 8, yPos);
+  }
+  
+  // Draw lines and dots for Cold (blue) and Warm (yellow)
+  if (cold.length > 0) {
+    const coldPts = cold.map(p => ({
+      x: new Date(p.date).getTime(),
+      y: p.accPct
+    }));
+    drawLine(ctx, coldPts, colBlue, xScale, yScale);
+    coldPts.forEach(p => drawDot(ctx, xScale(p.x), yScale(p.y), colBlue, 4));
+  }
+  
+  if (warm.length > 0) {
+    const warmPts = warm.map(p => ({
+      x: new Date(p.date).getTime(),
+      y: p.accPct
+    }));
+    drawLine(ctx, warmPts, colYellow, xScale, yScale);
+    warmPts.forEach(p => drawDot(ctx, xScale(p.x), yScale(p.y), colYellow, 4));
+  }
+  
+  // Update latest values
+  updateRecallLatestValues(cold, warm, selectedPc);
+  
+  // Chart title
+  ctx.fillStyle = colText;
+  ctx.font = '13px system-ui,sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(`Pitch Recall: ${pcLabel(selectedPc)}`, AX, AY - 2);
+}
+
+// Update latest values display
+function updateRecallLatestValues(cold, warm, pc) {
+  const latestEl = byId('recall-latest');
+  if (!latestEl) return;
+  
+  let latestText = '';
+  
+  if (cold.length > 0 || warm.length > 0) {
+    const parts = [];
+    
+    if (cold.length > 0) {
+      const latest = cold[cold.length - 1];
+      const cents = latest.cents || 0;
+      const sign = cents >= 0 ? '+' : '';
+      parts.push(`Cold: ${latest.accPct}% (${sign}${Math.round(cents)}¢)`);
+    }
+    
+    if (warm.length > 0) {
+      const latest = warm[warm.length - 1];
+      const cents = latest.cents || 0;
+      const sign = cents >= 0 ? '+' : '';
+      parts.push(`Warm: ${latest.accPct}% (${sign}${Math.round(cents)}¢)`);
+    }
+    
+    if (parts.length > 0) {
+      // Get most recent date
+      const allDates = [];
+      if (cold.length > 0) allDates.push(new Date(cold[cold.length - 1].date));
+      if (warm.length > 0) allDates.push(new Date(warm[warm.length - 1].date));
+      const mostRecent = new Date(Math.max(...allDates));
+      const dateStr = mostRecent.toISOString().split('T')[0];
+      
+      latestText = `Latest — ${parts.join(', ')} on ${dateStr}`;
+    }
+  }
+  // If no data, latestText remains empty string, which will clear the display
+  
+  latestEl.textContent = latestText;
 }
 
 /* ------------------ TUTORIAL PAGER ------------------ */
@@ -7346,7 +7869,8 @@ function wireOnce(){
     startRecallReview();
   });
   
-  safe('btnExportRecall', el=> el.onclick=()=> exportRecallCSV());
+  // CSV export removed - recall data now shown on tracker chart
+  // safe('btnExportRecall', el=> el.onclick=()=> exportRecallCSV());
 
   // Set selector
   safe('setSizeSelect', sel=>{
@@ -7514,13 +8038,16 @@ let fCtx, flappyRAF=null, running=false, score=0, pipes=[], bird, pipeTimer=0, l
 const FLAPPY = { gravity:900, flap:-380, baseSpeed:140, maxSpeed:260, speed:140, baseGap:140, gap:140, introPipes:5, introExtra:60, spawnEvery:1.20, width:52 };
 
 function openFlappyFromMenu(){ 
-  if(isLocked()) {
+  // Fix B.2: Use new gating logic
+  const inBreak = !!state.session.inBreak;
+  const isLockedOut = !!state.session.lockoutUntil && (Date.now() < new Date(state.session.lockoutUntil).getTime());
+  const canPlayFlappy = inBreak || isLockedOut;
+  
+  if(canPlayFlappy) {
     openFlappyModal(); 
-  } else if (state.timeblock && state.timeblock.breakActive && sessionActive) {
-    // Allow reopening flappy only during 60-second TimeBlock breaks
-    openFlappyModal();
   } else {
-    alert('Flappy is only available during lockout or 60-second training breaks.'); 
+    // Fix B.3: Use exact message from specification
+    alert('Flappy is available during 60-second breaks and after you complete today\'s training.'); 
   }
 }
 function openFlappyModal(){ 
@@ -7760,7 +8287,19 @@ function step(ts){
   bird.vy += FLAPPY.gravity * dt; bird.y  += bird.vy * dt;
   pipeTimer -= dt; if(pipeTimer <= 0){ pipeTimer += FLAPPY.spawnEvery; spawnPipe(); }
   for(const p of pipes){ p.x -= FLAPPY.speed * dt; }
-  for(const p of pipes){ if(!p.passed && p.x + FLAPPY.width < bird.x){ p.passed = true; score++; progressiveDifficulty(); text('flappyScore',`Score: ${score} • Best: ${state.flappyHighScore||0}`); } }
+  for(const p of pipes){ if(!p.passed && p.x + FLAPPY.width < bird.x){ p.passed = true; score++; progressiveDifficulty(); 
+    // Update high score immediately if new high score is achieved
+    if (score > (state.flappyHighScore || 0)) {
+      state.flappyHighScore = score;
+      save();
+      // Update high score display in top-right
+      const highScoreDisplay = byId('flappyHighScoreValue');
+      if (highScoreDisplay) {
+        highScoreDisplay.textContent = state.flappyHighScore;
+      }
+    }
+    // Update current score display with current high score
+    text('flappyScore',`Score: ${score} • Best: ${state.flappyHighScore||0}`); } }
   pipes = pipes.filter(p=> p.x + FLAPPY.width > 0);
   fCtx.clearRect(0,0,cnv.width,cnv.height); drawPipes(); drawBird();
   if(bird.y < 0 || bird.y > cnv.height){ return onFlappyLose(); }
@@ -8218,7 +8757,7 @@ window.qaAnalyzeDetune = function(last = 200) {
 
 /* ------------------ INIT ------------------ */
 window.addEventListener('load', wireOnce);
-window.addEventListener('resize', ()=>{ try{ drawChart(); }catch(_){ }});
+window.addEventListener('resize', ()=>{ try{ drawChart(); drawRecallChart(); }catch(_){ }});
 </script>
 </body>
 </html>
