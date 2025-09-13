@@ -252,18 +252,7 @@
 
 
 
-    <!-- Recall History -->
-    <div class="card" id="recallCard" style="margin-top:14px">
-      <h3>🎯 Recall History</h3>
-      <div style="margin-bottom:8px">
-        <!-- CSV export removed - recall data now shown on main tracker chart -->
-        <!-- <button id="btnExportRecall" style="background:var(--accent);color:var(--bg);font-weight:700;margin-right:8px">📄 Export Recall CSV</button> -->
-        <span style="opacity:0.7;font-size:13px">Today's cold/warm pitch recall results (also shown on tracker chart)</span>
-      </div>
-      <div id="recallHistoryToday" style="border:1px solid var(--muted);border-radius:12px;padding:12px;background:var(--card);min-height:80px">
-        <p id="recallHistoryEmpty" style="opacity:0.7;text-align:center;margin:20px 0">No recall data for today</p>
-      </div>
-    </div>
+
 
     <!-- Progress -->
     <div class="card" id="progressCard" style="margin-top:14px">
@@ -288,13 +277,20 @@
     <!-- Pitch Recall Chart -->
     <section id="recall-progress-card" class="card" style="margin-top:14px">
       <header><h3>🎯 Pitch Recall (Cold / Warm)</h3></header>
-      <div class="pc-chip-row" id="recall-pitch-chips" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"></div>
-      <canvas id="recall-progress-chart" width="1000" height="300" style="width:100%;height:auto;border-radius:12px;background:var(--card);border:1px solid var(--muted)"></canvas>
-      <div class="mini-legend" style="display:flex;gap:12px;align-items:center;font-size:13px;opacity:.9;margin-top:8px">
-        <span class="dot" style="width:12px;height:12px;border-radius:50%;background:#3b82f6"></span> Cold
-        <span class="dot" style="width:12px;height:12px;border-radius:50%;background:#eab308;margin-left:12px"></span> Warm
-        <span id="recall-latest" style="margin-left:12px;font-weight:600"></span>
+      <div id="recallControls" style="margin-bottom:12px">
+        <label for="recallPitchSelect">Pitch:</label>
+        <select id="recallPitchSelect" style="padding-right:28px"></select>
+        <label for="recallGranularitySelect">View:</label>
+        <select id="recallGranularitySelect" style="padding-right:28px">
+          <option value="WEEKLY" selected>Weekly (Day 1 → 7)</option>
+          <option value="OVERALL">Overall (Week 1 → 8)</option>
+        </select>
+        <div id="recallLegend" style="display:flex;gap:12px;align-items:center;font-size:13px;opacity:.9;margin-left:20px;display:inline-flex">
+          <span class="legendDot" style="background:#3b82f6"></span> <span>Cold</span>
+          <span class="legendDot" style="background:#eab308;margin-left:12px"></span> <span>Warm</span>
+        </div>
       </div>
+      <canvas id="recall-progress-chart" width="1000" height="300" style="width:100%;height:auto;border-radius:12px;background:var(--card);border:1px solid var(--muted)"></canvas>
     </section>
   </div>
 
@@ -2580,6 +2576,9 @@ function closeFlappyModal() {
   byId('flappyModal').style.display = 'none'; 
   detachFlappyControls();
   
+  // Clear menu flag
+  state.flappyFromMenu = false;
+  
   if (score > (state.flappyHighScore || 0)) { 
     state.flappyHighScore = score; 
     save(); 
@@ -2683,15 +2682,16 @@ function updateCapsUI(){
   
   // Fix B.2: Compute new gating flag for flappy availability  
   const inBreak = !!state.session.inBreak;
-  const isLockedOut = !!state.session.lockoutUntil && (Date.now() < new Date(state.session.lockoutUntil).getTime());
-  const canPlayFlappy = inBreak || isLockedOut;
+  const isLockedOut = !!state.lockoutUntil && (Date.now() < new Date(state.lockoutUntil).getTime());
+  const hasCompletedTraining = state.daily && state.daily.completedAt; // Training completed today
+  const canPlayFlappy = inBreak || isLockedOut || hasCompletedTraining;
 
   const pf = byId('playFlappy'); 
   if(pf) {
     pf.disabled = !canPlayFlappy;
     // Fix B.3: Update button text and message as specified
     if (canPlayFlappy) {
-      pf.textContent = '🐤 Play Flappy';
+      pf.textContent = '🐤 Flappy';
     } else {
       pf.textContent = '🐤 Flappy (unavailable)';
       // Note: Alert message is handled in openFlappyFromMenu() with exact text from spec
@@ -4238,6 +4238,14 @@ function closeRecallUI() {
   // Return to main menu
   showScreen('menuScreen');
   updateCapsUI();
+  
+  // Force update recall chart with new data
+  try {
+    populateRecallPitchSelect();
+    drawRecallChart();
+  } catch (e) {
+    console.warn('Failed to update recall chart:', e);
+  }
 }
 
 // Update only the content and button states without recreating the DOM
@@ -4388,8 +4396,8 @@ function midiToNoteLabel(midi) {
 function finishRecallReview() {
   if (!currentRecallSession) return;
   
-  // Update display
-  updateRecallDisplay();
+  // Update display (with error handling in case elements don't exist)
+  try { updateRecallDisplay(); } catch(_) {}
   
   // Set completion flags
   if (currentRecallSession.type === 'cold') {
@@ -6234,7 +6242,13 @@ function drawTrackerChart() {
   ctx.beginPath();
   ctx.moveTo(AX, AY);
   ctx.lineTo(AX, AY + AH);
-  ctx.lineTo(AX + AW, AY + AH);
+  ctx.stroke();
+  
+  // Draw X-axis at 0% line
+  const zeroY = yScale(0);
+  ctx.beginPath();
+  ctx.moveTo(AX, zeroY);
+  ctx.lineTo(AX + AW, zeroY);
   ctx.stroke();
   
   // Draw Y-axis labels
@@ -7576,8 +7590,8 @@ function populatePitchSelect(){
   sel.onchange = ()=> drawChart();
   const gran = byId('granularitySelect'); if(gran){ gran.onchange = ()=> drawChart(); gran.value='WEEKLY'; }
   
-  // Render recall chart components
-  renderRecallPitchChips();
+  // Initialize recall chart controls
+  populateRecallPitchSelect();
   drawRecallChart();
   
   // Update variety mode UI when menu is shown
@@ -7586,60 +7600,231 @@ function populatePitchSelect(){
 
 /* ------------------ RECALL CHART FUNCTIONS ------------------ */
 
-// Accuracy mapping function for recall (reuse existing if available)
-function recallAccPct(centsErr) {
+// Convert cents error to accuracy band (0-5 scale)
+function centsToAccuracyBand(centsErr) {
   const a = Math.abs(centsErr);
-  if (a <= 5) return 100;
-  const MAX = 600; // tritone boundary
-  const pct = 100 * (1 - (a - 5)/(MAX - 5));
-  return Math.max(0, Math.min(100, Math.round(pct)));
+  if (a <= 10) return 5; // ±10c = 100% (top band)
+  if (a <= 20) return 4; // ±11-20c  
+  if (a <= 50) return 3; // ±21-50c
+  if (a <= 100) return 2; // ±51-100c
+  if (a <= 200) return 1; // ±101-200c
+  return 0; // 201c+ (bottom band)
 }
 
-// Render pitch class chips for recall chart
-function renderRecallPitchChips() {
-  const container = byId('recall-pitch-chips');
-  if (!container) return;
-  
-  container.innerHTML = '';
-  const allPCs = ['A', 'Bb', 'B', 'C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab'];
-  
-  // Get currently trained pitches for visual highlighting
-  const currentSet = setFromIndex(state.levelIndex);
-  const trainedPitches = trainedSet(currentSet);
-  
-  allPCs.forEach(pc => {
-    const chip = document.createElement('button');
-    chip.textContent = pcLabel(pc);
-    chip.style.cssText = 'padding:6px 12px;margin:0;border-radius:16px;border:1px solid var(--muted);font-size:12px;cursor:pointer;';
-    
-    // Highlight if trained
-    if (trainedPitches.includes(pc)) {
-      chip.style.background = 'var(--muted)';
-      chip.style.color = 'var(--text)';
-    } else {
-      chip.style.background = 'var(--muted2)';
-      chip.style.color = 'var(--neutral)';
-    }
-    
-    // Highlight if selected
-    if (pc === state.ui.recallPitch) {
-      chip.style.background = 'var(--accent)';
-      chip.style.color = 'var(--bg)';
-      chip.style.fontWeight = '600';
-    }
-    
-    chip.onclick = () => {
-      state.ui.recallPitch = pc;
-      save();
-      renderRecallPitchChips(); // Re-render chips
-      drawRecallChart(); // Re-draw chart
-    };
-    
-    container.appendChild(chip);
-  });
+// Get accuracy band label
+function getAccuracyBandLabel(band) {
+  const labels = ['200c+', '101-200c', '51-100c', '21-50c', '11-20c', '±10c'];
+  return labels[band] || '200c+';
 }
 
-// Draw the recall chart
+// Populate recall pitch selector
+function populateRecallPitchSelect() {
+  const sel = byId('recallPitchSelect'); 
+  if (!sel) return;
+  sel.innerHTML='';
+  const mk=(v,t)=>{ const o=document.createElement('option'); o.value=v; o.textContent=t; return o; };
+  sel.appendChild(mk('OVERALL','Overall'));
+  PC.forEach(pc=> sel.appendChild(mk(pc, pcLabel(pc))));
+  sel.onchange = ()=> drawRecallChart();
+  
+  const gran = byId('recallGranularitySelect'); 
+  if (gran) { 
+    gran.onchange = ()=> drawRecallChart(); 
+    gran.value='WEEKLY'; 
+  }
+}
+
+// Get recall data bins for weekly view (most recent 7 days)
+function getRecallWeeklyBins(pitch) {
+  const bins = [];
+  for (let day = 1; day <= 7; day++) {
+    bins.push({
+      day: day,
+      cold: { count: 0, totalBand: 0 },
+      warm: { count: 0, totalBand: 0 }
+    });
+  }
+  
+  // Get recall data from analytics
+  const recallData = state.analytics?.recallSeries || [];
+  if (recallData.length === 0) return bins;
+  
+  // Get the most recent 7 days ending with today
+  const today = new Date();
+  today.setHours(23, 59, 59, 999); // End of today
+  const sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setDate(today.getDate() - 6); // 7 days ago (inclusive of today)
+  sevenDaysAgo.setHours(0, 0, 0, 0); // Start of that day
+  
+  if (pitch === 'OVERALL') {
+    // For OVERALL: Calculate average accuracy across all pitches per day
+    const dailyData = {};
+    
+    // Group data by day and tag (cold/warm)
+    recallData.forEach(entry => {
+      const entryDate = new Date(entry.date);
+      
+      // Check if entry is within the last 7 days
+      if (entryDate < sevenDaysAgo || entryDate > today) return;
+      
+      // Calculate which day this belongs to (1-7, where 1 is today, 7 is 7 days ago)  
+      const daysSinceStart = Math.floor((entryDate - sevenDaysAgo) / (24 * 60 * 60 * 1000));
+      const day = Math.min(7, Math.max(1, 8 - (daysSinceStart + 1))); // Reverse: Day 1 = today, Day 7 = 7 days ago
+      
+      const key = `${day}-${entry.tag}`;
+      if (!dailyData[key]) {
+        dailyData[key] = [];
+      }
+      
+      const band = centsToAccuracyBand(entry.cents || 0);
+      dailyData[key].push(band);
+    });
+    
+    // Calculate averages for each day
+    for (const [key, bandValues] of Object.entries(dailyData)) {
+      const [day, tag] = key.split('-');
+      const dayNum = parseInt(day);
+      const bin = bins[dayNum - 1];
+      
+      if (bandValues.length > 0) {
+        const avgBand = bandValues.reduce((sum, band) => sum + band, 0) / bandValues.length;
+        
+        if (tag === 'cold') {
+          bin.cold.count = 1; // Represent as one averaged point
+          bin.cold.totalBand = avgBand;
+        } else if (tag === 'warm') {
+          bin.warm.count = 1; // Represent as one averaged point
+          bin.warm.totalBand = avgBand;
+        }
+      }
+    }
+  } else {
+    // Original logic for specific pitch selection
+    recallData.forEach(entry => {
+      const entryDate = new Date(entry.date);
+      
+      // Check if entry is within the last 7 days
+      if (entryDate < sevenDaysAgo || entryDate > today) return;
+      
+      // Check pitch filter
+      if (entry.pc !== pitch) return;
+      
+      // Calculate which day this belongs to (1-7, where 1 is today, 7 is 7 days ago)
+      const daysSinceStart = Math.floor((entryDate - sevenDaysAgo) / (24 * 60 * 60 * 1000));
+      const day = Math.min(7, Math.max(1, 8 - (daysSinceStart + 1))); // Reverse: Day 1 = today, Day 7 = 7 days ago
+      
+      // Convert cents error to accuracy band
+      const band = centsToAccuracyBand(entry.cents || 0);
+      
+      // Add to appropriate bin (cold or warm)
+      const bin = bins[day - 1]; // 0-based array indexing
+      if (entry.tag === 'cold') {
+        bin.cold.count++;
+        bin.cold.totalBand += band;
+      } else if (entry.tag === 'warm') {
+        bin.warm.count++;
+        bin.warm.totalBand += band;
+      }
+    });
+  }
+  
+  return bins;
+}
+
+// Get recall data bins for overall view (similar to eightWeekBins) 
+function getRecallOverallBins(pitch) {
+  const bins = [];
+  for (let week = 1; week <= 8; week++) {
+    bins.push({
+      week: week,
+      cold: { count: 0, totalBand: 0 },
+      warm: { count: 0, totalBand: 0 }
+    });
+  }
+  
+  // Get recall data from analytics
+  const recallData = state.analytics?.recallSeries || [];
+  if (recallData.length === 0) return bins;
+  
+  // Get start date of training program (8-week period)
+  const startDate = state.startDate ? new Date(state.startDate) : new Date();
+  
+  if (pitch === 'OVERALL') {
+    // For OVERALL: Calculate average accuracy across all pitches per week
+    const weeklyData = {};
+    
+    // Group data by week and tag (cold/warm)
+    recallData.forEach(entry => {
+      const entryDate = new Date(entry.date);
+      
+      // Calculate which week this entry belongs to (1-8)
+      const daysSinceStart = Math.floor((entryDate - startDate) / (24 * 60 * 60 * 1000));
+      const week = Math.floor(daysSinceStart / 7) + 1;
+      
+      // Check if entry is within 8-week range
+      if (week < 1 || week > 8) return;
+      
+      const key = `${week}-${entry.tag}`;
+      if (!weeklyData[key]) {
+        weeklyData[key] = [];
+      }
+      
+      const band = centsToAccuracyBand(entry.cents || 0);
+      weeklyData[key].push(band);
+    });
+    
+    // Calculate averages for each week
+    for (const [key, bandValues] of Object.entries(weeklyData)) {
+      const [week, tag] = key.split('-');
+      const weekNum = parseInt(week);
+      const bin = bins[weekNum - 1];
+      
+      if (bandValues.length > 0) {
+        const avgBand = bandValues.reduce((sum, band) => sum + band, 0) / bandValues.length;
+        
+        if (tag === 'cold') {
+          bin.cold.count = 1; // Represent as one averaged point
+          bin.cold.totalBand = avgBand;
+        } else if (tag === 'warm') {
+          bin.warm.count = 1; // Represent as one averaged point
+          bin.warm.totalBand = avgBand;
+        }
+      }
+    }
+  } else {
+    // Original logic for specific pitch selection
+    recallData.forEach(entry => {
+      const entryDate = new Date(entry.date);
+      
+      // Calculate which week this entry belongs to (1-8)
+      const daysSinceStart = Math.floor((entryDate - startDate) / (24 * 60 * 60 * 1000));
+      const week = Math.floor(daysSinceStart / 7) + 1;
+      
+      // Check if entry is within 8-week range
+      if (week < 1 || week > 8) return;
+      
+      // Check pitch filter
+      if (entry.pc !== pitch) return;
+      
+      // Convert cents error to accuracy band
+      const band = centsToAccuracyBand(entry.cents || 0);
+      
+      // Add to appropriate bin (cold or warm)
+      const bin = bins[week - 1]; // 0-based array indexing
+      if (entry.tag === 'cold') {
+        bin.cold.count++;
+        bin.cold.totalBand += band;
+      } else if (entry.tag === 'warm') {
+        bin.warm.count++;
+        bin.warm.totalBand += band;
+      }
+    });
+  }
+  
+  return bins;
+}
+
+// Draw the recall chart (updated to match main progress chart)
 function drawRecallChart() {
   const canvas = byId('recall-progress-chart');
   if (!canvas) return;
@@ -7661,132 +7846,158 @@ function drawRecallChart() {
   ctx.fillStyle = colCard;
   ctx.fillRect(0, 0, W, H);
   
-  // Get recall data for selected pitch
-  const selectedPc = state.ui.recallPitch || 'A';
-  const rows = (state.analytics?.recallSeries || []).filter(p => p.pc === selectedPc);
+  const mode = byId('recallGranularitySelect')?.value || 'WEEKLY';
+  const pitch = byId('recallPitchSelect')?.value || 'OVERALL';
   
-  if (rows.length === 0) {
-    // Show empty state
-    ctx.fillStyle = colText;
-    ctx.font = '14px Fredoka, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(`No recall data for ${pcLabel(selectedPc)} yet.`, W / 2, H / 2);
-    // Clear latest values when no data
-    updateRecallLatestValues([], [], selectedPc);
-    return;
-  }
+  // Y-axis scale: 0 = 200c+, 5 = ±10c (inverted from band numbers)
+  const yscale = (band) => AY + AH - ((band / 5) * AH);
   
-  // Filter and limit to last 30 entries per series
-  const cold = rows.filter(p => p.tag === 'cold').slice(-30);
-  const warm = rows.filter(p => p.tag === 'warm').slice(-30);
-  
-  if (cold.length === 0 && warm.length === 0) {
-    ctx.fillStyle = colText;
-    ctx.font = '14px Fredoka, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(`No recall data for ${pcLabel(selectedPc)} yet.`, W / 2, H / 2);
-    // Clear latest values when no data
-    updateRecallLatestValues([], [], selectedPc);
-    return;
-  }
-  
-  // Combine data points for x-axis scaling
-  const allPoints = [...cold, ...warm];
-  const dates = allPoints.map(p => new Date(p.date).getTime()).sort();
-  const minDate = dates[0];
-  const maxDate = dates[dates.length - 1];
-  const dateRange = maxDate - minDate || 86400000; // At least 1 day range
-  
-  // Scales
-  const xScale = (date) => AX + ((date - minDate) / dateRange) * AW;
-  const yScale = (pct) => AY + AH - (pct / 100) * AH;
-  
-  // Draw Y grid and labels
-  ctx.strokeStyle = colMuted;
-  ctx.lineWidth = 1;
+  /* Y grid + labels */
+  ctx.strokeStyle = colMuted; 
+  ctx.lineWidth = 1; 
   ctx.beginPath();
-  for (let y = 0; y <= 100; y += 20) {
-    const yPos = yScale(y);
-    ctx.moveTo(AX, yPos);
-    ctx.lineTo(AX + AW, yPos);
-  }
+  for (let band = 0; band <= 5; band++) { 
+    const y = yscale(band); 
+    ctx.moveTo(AX, y); 
+    ctx.lineTo(AX + AW, y);
+  } 
   ctx.stroke();
   
-  ctx.fillStyle = colText;
+  ctx.fillStyle = colText; 
   ctx.font = '12px system-ui,sans-serif';
   ctx.textAlign = 'right';
-  for (let y = 0; y <= 100; y += 20) {
-    const yPos = yScale(y) + 4;
-    ctx.fillText(String(y) + '%', AX - 8, yPos);
+  for (let band = 0; band <= 5; band++) { 
+    const y = yscale(band) + 4; 
+    ctx.fillText(getAccuracyBandLabel(band), AX - 8, y); 
   }
-  
-  // Draw lines and dots for Cold (blue) and Warm (yellow)
-  if (cold.length > 0) {
-    const coldPts = cold.map(p => ({
-      x: new Date(p.date).getTime(),
-      y: p.accPct
-    }));
-    drawLine(ctx, coldPts, colBlue, xScale, yScale);
-    coldPts.forEach(p => drawDot(ctx, xScale(p.x), yScale(p.y), colBlue, 4));
-  }
-  
-  if (warm.length > 0) {
-    const warmPts = warm.map(p => ({
-      x: new Date(p.date).getTime(),
-      y: p.accPct
-    }));
-    drawLine(ctx, warmPts, colYellow, xScale, yScale);
-    warmPts.forEach(p => drawDot(ctx, xScale(p.x), yScale(p.y), colYellow, 4));
-  }
-  
-  // Update latest values
-  updateRecallLatestValues(cold, warm, selectedPc);
-  
-  // Chart title
-  ctx.fillStyle = colText;
-  ctx.font = '13px system-ui,sans-serif';
-  ctx.textAlign = 'left';
-  ctx.fillText(`Pitch Recall: ${pcLabel(selectedPc)}`, AX, AY - 2);
-}
 
-// Update latest values display
-function updateRecallLatestValues(cold, warm, pc) {
-  const latestEl = byId('recall-latest');
-  if (!latestEl) return;
-  
-  let latestText = '';
-  
-  if (cold.length > 0 || warm.length > 0) {
-    const parts = [];
+  if (mode === 'WEEKLY') {
+    const bins = getRecallWeeklyBins(pitch);
+    const xscale = (d) => AX + ((d - 1) / (7 - 1)) * AW;
     
-    if (cold.length > 0) {
-      const latest = cold[cold.length - 1];
-      const cents = latest.cents || 0;
-      const sign = cents >= 0 ? '+' : '';
-      parts.push(`Cold: ${latest.accPct}% (${sign}${Math.round(cents)}¢)`);
+    // X grid
+    ctx.strokeStyle = colMuted; 
+    ctx.beginPath();
+    for (let d = 1; d <= 7; d++) { 
+      const x = xscale(d); 
+      ctx.moveTo(x, AY); 
+      ctx.lineTo(x, AY + AH);
+    } 
+    ctx.stroke();
+    
+    // X labels
+    ctx.fillStyle = colText;
+    ctx.textAlign = 'center';
+    for (let d = 1; d <= 7; d++) { 
+      const x = xscale(d); 
+      ctx.fillText(`Day ${d}`, x, H - 6); 
     }
     
-    if (warm.length > 0) {
-      const latest = warm[warm.length - 1];
-      const cents = latest.cents || 0;
-      const sign = cents >= 0 ? '+' : '';
-      parts.push(`Warm: ${latest.accPct}% (${sign}${Math.round(cents)}¢)`);
-    }
     
-    if (parts.length > 0) {
-      // Get most recent date
-      const allDates = [];
-      if (cold.length > 0) allDates.push(new Date(cold[cold.length - 1].date));
-      if (warm.length > 0) allDates.push(new Date(warm[warm.length - 1].date));
-      const mostRecent = new Date(Math.max(...allDates));
-      const dateStr = mostRecent.toISOString().split('T')[0];
+    if (pitch === 'OVERALL') {
+      // For OVERALL, plot averaged data points using bins
+      bins.forEach(bin => {
+        const x = xscale(bin.day);
+        
+        // Cold data (blue) - plot averaged point
+        if (bin.cold.count > 0) {
+          const avgBand = bin.cold.totalBand; // Already averaged in bin function
+          drawDot(ctx, x - 8, yscale(avgBand), colBlue, 6);
+        }
+        
+        // Warm data (yellow) - plot averaged point
+        if (bin.warm.count > 0) {
+          const avgBand = bin.warm.totalBand; // Already averaged in bin function  
+          drawDot(ctx, x + 8, yscale(avgBand), colYellow, 6);
+        }
+      });
+    } else {
+      // For specific pitch, plot individual recall data points
+      const recallData = state.analytics?.recallSeries || [];
       
-      latestText = `Latest — ${parts.join(', ')} on ${dateStr}`;
+      // Get the most recent 7 days ending with today
+      const today = new Date();
+      today.setHours(23, 59, 59, 999);
+      const sevenDaysAgo = new Date(today);
+      sevenDaysAgo.setDate(today.getDate() - 6);
+      sevenDaysAgo.setHours(0, 0, 0, 0);
+      
+      // Filter and plot individual data points for specific pitch
+      recallData.forEach(entry => {
+        const entryDate = new Date(entry.date);
+        
+        // Check if entry is within the last 7 days
+        if (entryDate < sevenDaysAgo || entryDate > today) return;
+        
+        // Check pitch filter
+        if (entry.pc !== pitch) return;
+        
+        // Calculate which day this belongs to (1-7, where 1 is today, 7 is 7 days ago)
+        const daysSinceStart = Math.floor((entryDate - sevenDaysAgo) / (24 * 60 * 60 * 1000));
+        const day = Math.min(7, Math.max(1, 8 - (daysSinceStart + 1))); // Reverse: Day 1 = today, Day 7 = 7 days ago
+        
+        const x = xscale(day);
+        const band = centsToAccuracyBand(entry.cents || 0);
+        const y = yscale(band);
+        
+        // Plot individual points with small offset for same-day entries
+        if (entry.tag === 'cold') {
+          drawDot(ctx, x - 8, y, colBlue, 5);
+        } else if (entry.tag === 'warm') {
+          drawDot(ctx, x + 8, y, colYellow, 5);
+        }
+      });
+    }
+    
+  } else {
+    // OVERALL mode - Week 1 to 8
+    const bins = getRecallOverallBins(pitch);
+    const xscale = (w) => AX + ((w - 1) / (8 - 1)) * AW;
+    
+    // X grid
+    ctx.strokeStyle = colMuted; 
+    ctx.beginPath();
+    for (let w = 1; w <= 8; w++) { 
+      const x = xscale(w); 
+      ctx.moveTo(x, AY); 
+      ctx.lineTo(x, AY + AH);
+    } 
+    ctx.stroke();
+    
+    // X labels
+    ctx.fillStyle = colText;
+    ctx.textAlign = 'center';
+    for (let w = 1; w <= 8; w++) { 
+      const x = xscale(w); 
+      ctx.fillText(`Week ${w}`, x, H - 6); 
+    }
+    
+    // Plot points for cold and warm data using bins
+    for (const bin of bins) {
+      const x = xscale(bin.week);
+      
+      // Cold data (blue)
+      if (bin.cold.count > 0) {
+        const avgBand = pitch === 'OVERALL' ? bin.cold.totalBand : bin.cold.totalBand / bin.cold.count;
+        drawDot(ctx, x - 8, yscale(avgBand), colBlue, 6);
+      }
+      
+      // Warm data (yellow)
+      if (bin.warm.count > 0) {
+        const avgBand = pitch === 'OVERALL' ? bin.warm.totalBand : bin.warm.totalBand / bin.warm.count;
+        drawDot(ctx, x + 8, yscale(avgBand), colYellow, 6);
+      }
     }
   }
-  // If no data, latestText remains empty string, which will clear the display
   
-  latestEl.textContent = latestText;
+  // Show empty state message only if no data exists
+  const recallData = state.analytics?.recallSeries || [];
+  if (recallData.length === 0) {
+    ctx.fillStyle = colText;
+    ctx.font = '14px Fredoka, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('No recall data yet. Complete cold/warm recall to see results.', W / 2, H / 2);
+  }
 }
 
 /* ------------------ TUTORIAL PAGER ------------------ */
@@ -8038,12 +8249,15 @@ let fCtx, flappyRAF=null, running=false, score=0, pipes=[], bird, pipeTimer=0, l
 const FLAPPY = { gravity:900, flap:-380, baseSpeed:140, maxSpeed:260, speed:140, baseGap:140, gap:140, introPipes:5, introExtra:60, spawnEvery:1.20, width:52 };
 
 function openFlappyFromMenu(){ 
-  // Fix B.2: Use new gating logic
+  // Fix B.2: Use new gating logic including training completion
   const inBreak = !!state.session.inBreak;
-  const isLockedOut = !!state.session.lockoutUntil && (Date.now() < new Date(state.session.lockoutUntil).getTime());
-  const canPlayFlappy = inBreak || isLockedOut;
+  const isLockedOut = !!state.lockoutUntil && (Date.now() < new Date(state.lockoutUntil).getTime());
+  const hasCompletedTraining = state.daily && state.daily.completedAt; // Training completed today
+  const canPlayFlappy = inBreak || isLockedOut || hasCompletedTraining;
   
   if(canPlayFlappy) {
+    // Set flag to indicate Flappy was opened from menu (should always use flappy.mp3)
+    state.flappyFromMenu = true;
     openFlappyModal(); 
   } else {
     // Fix B.3: Use exact message from specification
@@ -8089,7 +8303,7 @@ function openFlappyModal(){
   
   // Update description based on context
   if (description) {
-    if (state.timeblock?.breakActive || isLocked()) {
+    if (state.flappyFromMenu || state.timeblock?.breakActive || isLocked()) {
       description.textContent = 'Tap/click (or Space) to flap. First tap starts — each flap makes a flappy sound.';
     } else {
       description.textContent = 'Tap/click (or Space) to flap. First tap starts — each flap plays a random pitch.';
@@ -8213,6 +8427,9 @@ function closeFlappy(){
   running=false; cancelAnimationFrame(flappyRAF); byId('flappyModal').style.display='none'; detachFlappyControls();
   if(score > (state.flappyHighScore||0)){ state.flappyHighScore = score; save(); }
   
+  // Clear menu flag
+  state.flappyFromMenu = false;
+  
   // Remove break message if it exists
   const breakMessage = byId('breakMessage');
   if (breakMessage) breakMessage.remove();
@@ -8234,9 +8451,9 @@ function flap(){
   
   // Only play sound if not muted
   if (!state.flappyMuted) {
-    // During TimeBlock breaks or lockout, always play flappy sound
-    // During regular play (rewards), play random pitches
-    if (state.timeblock?.breakActive || isLocked()) {
+    // Always play flappy sound when opened from menu (lockout/completed training scenarios)
+    // or during TimeBlock breaks
+    if (state.flappyFromMenu || state.timeblock?.breakActive || isLocked()) {
       playFlappySound();
     } else {
       // Regular flappy bird with musical pitches (only during rewards)
