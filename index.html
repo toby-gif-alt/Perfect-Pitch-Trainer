@@ -71,6 +71,19 @@
   #tutorialNav{display:flex;gap:8px;justify-content:space-between;margin-top:10px}
   #tBack{visibility:hidden}
 
+  /* README pager */
+  .rPage{display:none}
+  .rPage.active{display:block}
+  #readmeNav{display:flex;gap:8px;justify-content:space-between;margin-top:10px}
+  #rBack{visibility:hidden}
+  #readmeModal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:1000;background:rgba(0,0,0,.55);pointer-events:auto}
+  #readmeBox{width:min(760px,92vw);background:var(--card);border:1px solid var(--muted);border-radius:16px;padding:18px 20px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  #readmeBox h2{margin:0 0 8px}
+  #readmeBtns{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
+  #readmeWrap{background:var(--card);border:1px solid var(--muted);border-radius:12px;padding:12px;margin:10px 0}
+  .rPage h4{margin-top:16px;margin-bottom:8px;color:var(--accent)}
+  #readmeBtns button{background:var(--muted)}
+
   /* Special exercise strip */
   #specialBar{display:none;align-items:center;justify-content:space-between;background:var(--muted2);border:1px solid var(--muted);color:var(--text);padding:8px 12px;border-radius:10px;margin-bottom:10px}
 
@@ -169,6 +182,98 @@
     </div>
   </div>
 
+  <!-- README Modal -->
+  <div id="readmeModal" aria-modal="true" role="dialog">
+    <div id="readmeBox" class="card">
+      <h2>🎵 Perfect Pitch Trainer – What to Expect</h2>
+      <div id="readmeWrap">
+        <div class="rPage active" id="rPage1">
+          <h3>Welcome!</h3>
+          <p>This trainer is designed to help you build true absolute pitch through daily, structured practice. The process works, but it doesn't always feel smooth. This guide explains what you'll experience, why certain stages feel hard, and how to stay on track.</p>
+        </div>
+        <div class="rPage" id="rPage2">
+          <h3>✅ Training rules</h3>
+          <p>To get the most out of this program, it's important to train the right way:</p>
+          <ul>
+            <li><strong>Limit practice to 30 minutes per day.</strong> Fatigue slows learning and can reinforce mistakes.</li>
+            <li><strong>Stick with the program's structure</strong> — the balance of feedback, tests, and resets is deliberate.</li>
+            <li><strong>Use headphones in a quiet environment</strong> so you're training your ear on the cleanest possible sound.</li>
+          </ul>
+        </div>
+        <div class="rPage" id="rPage3">
+          <h3>📅 Typical Timeline</h3>
+          <p>Progress doesn't happen in a straight line. Expect plateaus, dips, and sudden breakthroughs. Here's a rough guide:</p>
+          <h4><strong>1–2 pitches (days to 1 week)</strong></h4>
+          <p>Fast progress feels easy. At this stage, you're often relying on relative pitch strategies rather than true absolute memory.</p>
+          <h4><strong>3 pitches (1–3 weeks)</strong></h4>
+          <p>This is the first big wall. Accuracy often swings between 50–80%, and training can feel tiring or frustrating. That's because your brain is beginning to form direct pitch labels instead of leaning on relative tricks.</p>
+        </div>
+        <div class="rPage" id="rPage4">
+          <h3>📅 Typical Timeline (continued)</h3>
+          <h4><strong>4–5 pitches (2–4 weeks)</strong></h4>
+          <p>Once a couple of notes "lock in," progress feels smoother. Accuracy is still jagged but generally trending upward.</p>
+          <h4><strong>6–7 pitches (3–6 weeks)</strong></h4>
+          <p>Pitch categories start to feel stable. Some notes will click quickly, while others may lag behind.</p>
+          <h4><strong>8–12 pitches (2–3 months total)</strong></h4>
+          <p>By now you'll be working across the full chroma set. Expect accuracy around 80–90% in training. Recognition begins to feel more natural, though instant effortless recall may take longer — often months of light reinforcement.</p>
+        </div>
+        <div class="rPage" id="rPage5">
+          <h3>🧭 Reset vs. Persevere</h3>
+          <p>Learners often wonder: "Should I push forward or go back?" Here's a simple rule of thumb:</p>
+          <ul>
+            <li>If you're holding <strong>≥60% accuracy</strong>, keep going — even if it feels shaky.</li>
+            <li>If you drop to <strong>&lt;50% accuracy</strong> for multiple blocks in a row, reset to reinforce.</li>
+            <li>If you pass a test "by fluke," don't worry — the next stage will reveal weak spots and strengthen them.</li>
+          </ul>
+        </div>
+        <div class="rPage" id="rPage6">
+          <h3>💡 Common Experiences</h3>
+          <p>Learning absolute pitch involves rewiring how you hear. That means some strange (but normal) experiences along the way:</p>
+          <h4><strong>Blank-outs</strong></h4>
+          <p>Sometimes you'll "go blank" and miss 5–10 trials in a row. This doesn't mean you've lost ability — it's usually fatigue or your brain resetting.</p>
+          <ul>
+            <li>If it lasts a few trials, push through.</li>
+            <li>If it lasts a whole block, take a short break.</li>
+            <li>Often, blank-outs come just before a new pitch category stabilizes.</li>
+          </ul>
+        </div>
+        <div class="rPage" id="rPage7">
+          <h3>💡 Common Experiences (continued)</h3>
+          <h4><strong>Relative pitch vs. Absolute pitch</strong></h4>
+          <p>Early on, you may rely on relative tricks (intervals, tonal pulls). Sometimes they work, other times they feel "blocked." This is a good sign: it means your brain is being pushed to rely on absolute pitch memory instead. Over time, these blocked moments shrink as absolute categories take over.</p>
+          <h4><strong>The "second voice" phenomenon</strong></h4>
+          <p>You may press a note, get it wrong, but at the same time hear another inner voice suggesting the correct answer. This happens because your brain is running two systems in parallel:</p>
+          <ul>
+            <li><strong>Relative/guessing system</strong> — fast, automatic, often drives your first click.</li>
+            <li><strong>Absolute memory system</strong> — slower at first, but more accurate.</li>
+          </ul>
+          <p>At this stage, the older system may shout first, but the new one is already whispering the right answer. Over time, that second voice will move to the front.</p>
+          <p><strong>👉 Count these moments as progress</strong> — they're proof that absolute pitch memory is emerging.</p>
+        </div>
+        <div class="rPage" id="rPage8">
+          <h3>💡 Common Experiences (continued)</h3>
+          <h4><strong>Fuzzy vs. Clear notes</strong></h4>
+          <p>At first, notes may sound fuzzy or messy — especially through compressed samples. You might strain to pick details apart to decide if something is F or F#.</p>
+          <p>Then suddenly, the fuzziness can strip away, and the note feels like a clear, distinct piano tone.</p>
+          <p>This isn't just audio quality — it's your brain learning to filter out noise and focus on the core identity of the pitch.</p>
+          <p><strong>👉 When this clarity appears, treat it as a milestone:</strong> your perception is shifting from "messy sound" to "stable pitch category."</p>
+        </div>
+        <div class="rPage" id="rPage9">
+          <h3>⚡ Remember</h3>
+          <p><strong>There are only 12 notes to learn.</strong> Absolute pitch memory builds slowly, then "snaps" into place. Stick with the daily plan, trust the process, and the results will come.</p>
+          <p style="text-align:center;margin-top:20px;font-size:18px;"><strong>Good luck on your absolute pitch journey!</strong></p>
+        </div>
+      </div>
+      <div id="readmeBtns">
+        <div id="readmeNav" style="width:100%">
+          <button id="rBack">◀ Back</button>
+          <div style="flex:1"></div>
+          <button id="rNext">Next ▶</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Menu -->
   <div class="card screen" id="menuScreen">
     <h1 id="greeting">Absolute Pitch Trainer</h1>
@@ -183,6 +288,7 @@
       <button id="viewTracker">📊 Track</button>
       <button id="startWarmRecall">🔥 Warm Recall</button>
       <button id="playFlappy">🐤 Flappy (breaks/lockout only)</button>
+      <button id="showReadmeModal">📚 Important - Readme before starting</button>
       <button id="menuReset">⟲ Reset (factory)</button>
     </div>
 
@@ -8014,6 +8120,21 @@ function setTutorialPage(i){
 function nextTutorial(){ if(tIndex<6){ setTutorialPage(tIndex+1); return; } hide('welcomeModal'); showScreen('menuScreen'); updateCapsUI(); populatePitchSelect(); drawChart(); }
 function prevTutorial(){ setTutorialPage(tIndex-1); }
 
+/* ------------------ README PAGER ------------------ */
+let rIndex = 0;
+function setReadmePage(i){
+  rIndex = Math.max(0, Math.min(8, i));
+  ['rPage1','rPage2','rPage3','rPage4','rPage5','rPage6','rPage7','rPage8','rPage9'].forEach((id, idx)=>{
+    const el = byId(id);
+    if(el) el.classList.toggle('active', idx===rIndex);
+  });
+  const back = byId('rBack'); if(back) back.style.visibility = (rIndex===0 ? 'hidden' : 'visible');
+  const next = byId('rNext'); if(next) next.textContent = (rIndex===8 ? 'Got it' : 'Next ▶');
+}
+function nextReadme(){ if(rIndex<8){ setReadmePage(rIndex+1); return; } hide('readmeModal'); }
+function prevReadme(){ setReadmePage(rIndex-1); }
+function showReadmeModal(){ showFlex('readmeModal'); setReadmePage(0); }
+
 /* ------------------ WIRING ------------------ */
 function wireOnce(){
   sealDanglingSession();
@@ -8038,12 +8159,17 @@ function wireOnce(){
   safe('tNext', el=> el.onclick=()=> nextTutorial());
   safe('tBack', el=> el.onclick=()=> prevTutorial());
 
+  // README modal
+  safe('rNext', el=> el.onclick=()=> nextReadme());
+  safe('rBack', el=> el.onclick=()=> prevReadme());
+
   // Menu
   safe('menuStart',   el=> el.onclick=()=> startSession());
   safe('startAssessment', el=> el.onclick=()=> startAssessment());
   safe('viewTracker', el=> el.onclick=()=> showTracker());
   safe('startWarmRecall', el=> el.onclick=()=> startWarmRecallFromMenu());
   safe('playFlappy',  el=> el.onclick=()=> openFlappyFromMenu());
+  safe('showReadmeModal', el=> el.onclick=()=> showReadmeModal());
   safe('menuReset',   el=> el.onclick=()=> doFactoryReset());
 
   // Assessment warning modal
