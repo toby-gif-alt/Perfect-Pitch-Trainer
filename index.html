@@ -1506,7 +1506,102 @@ if (!state.ui.recallPitch) {
 
 // Apply theme on load
 applyTheme(state.theme);
-function save(){ try{ localStorage.setItem('apTrainer', JSON.stringify(state)); }catch(e){ report(e); } }
+
+// Data cleanup to prevent localStorage quota issues
+function cleanupStateData() {
+  try {
+    // Limit trials array to last 500 entries (previously unlimited)
+    if (state.trials && state.trials.length > 500) {
+      state.trials = state.trials.slice(-500);
+    }
+    
+    // Limit sessions array to last 20 sessions
+    if (state.sessions && state.sessions.length > 20) {
+      state.sessions = state.sessions.slice(-20);
+    }
+    
+    // Clean up recall data - keep only last 30 days
+    if (state.recall) {
+      const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+      const cutoffDate = new Date(thirtyDaysAgo).toISOString().split('T')[0];
+      
+      for (const dateKey of Object.keys(state.recall)) {
+        if (dateKey !== 'review' && dateKey !== 'reviewIndex' && dateKey < cutoffDate) {
+          delete state.recall[dateKey];
+        }
+      }
+    }
+    
+    // Limit oobController arrays
+    if (state.oobController) {
+      if (state.oobController.last60InBounds && state.oobController.last60InBounds.length > 60) {
+        state.oobController.last60InBounds = state.oobController.last60InBounds.slice(-60);
+      }
+      if (state.oobController.recentOobTrials && state.oobController.recentOobTrials.length > 20) {
+        state.oobController.recentOobTrials = state.oobController.recentOobTrials.slice(-20);
+      }
+      if (state.oobController.oobSeries && state.oobController.oobSeries.length > 100) {
+        state.oobController.oobSeries = state.oobController.oobSeries.slice(-100);
+      }
+    }
+    
+    // Limit inBoundsLast60 array
+    if (state.inBoundsLast60 && state.inBoundsLast60.length > 60) {
+      state.inBoundsLast60 = state.inBoundsLast60.slice(-60);
+    }
+    
+    // Clean up oct.inBoundsSinceSetStart to prevent excessive growth
+    if (state.oct && state.oct.inBoundsSinceSetStart && state.oct.inBoundsSinceSetStart.length > 50) {
+      state.oct.inBoundsSinceSetStart = state.oct.inBoundsSinceSetStart.slice(-50);
+    }
+    
+    // Clean up timbre history
+    if (state.timbre && state.timbre.history && state.timbre.history.length > 50) {
+      state.timbre.history = state.timbre.history.slice(-50);
+    }
+    
+    // Clean up timbre perPcStats last40 arrays
+    if (state.timbre && state.timbre.perPcStats) {
+      for (const pc of Object.keys(state.timbre.perPcStats)) {
+        for (const timbre of Object.keys(state.timbre.perPcStats[pc] || {})) {
+          const stats = state.timbre.perPcStats[pc][timbre];
+          if (stats && stats.last40 && stats.last40.length > 40) {
+            stats.last40 = stats.last40.slice(-40);
+          }
+        }
+      }
+    }
+    
+    // Clean up recall frames to prevent massive memory usage
+    if (state.recall && state.recall.frames && state.recall.frames.length > 1000) {
+      // Keep only the most recent 1000 frames during active recording
+      state.recall.frames = state.recall.frames.slice(-1000);
+    }
+    
+    // Remove frames array completely if not currently capturing to save space
+    if (state.recall && state.recall.frames && !state.recall.capturing) {
+      delete state.recall.frames;
+      delete state.recall.framesCount;
+    }
+    
+    // Limit assessment scores to last 50 entries
+    if (state.assessmentScores && state.assessmentScores.length > 50) {
+      state.assessmentScores = state.assessmentScores.slice(-50);
+    }
+    
+  } catch (e) {
+    console.warn('Error during state cleanup:', e);
+  }
+}
+
+function save(){ 
+  try{ 
+    cleanupStateData();
+    localStorage.setItem('apTrainer', JSON.stringify(state)); 
+  } catch(e){ 
+    report(e); 
+  } 
+}
 window.state = state;
 
 /* ------------------ TIME HELPERS ------------------ */
