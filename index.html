@@ -306,7 +306,6 @@
     <h1 id="greeting">Absolute Pitch Trainer</h1>
     <div class="row">
       <span class="pill" id="capInfo">Training not started</span>
-      <span class="pill" id="weekPill">This week: 0 hrs 0 mins</span>
       <span class="pill" id="lockoutPill" style="display:none">🔒 Locked</span>
     </div>
     <div class="row">
@@ -2888,17 +2887,18 @@ function updateCapsUI(){
   //   text('capInfo', `Left: ${fmtMMSS(left)}`);
   // }
   
-  const usedW = state.thisWeekMs || 0;
-  const wp = byId('weekPill');
-  if(wp){
-    wp.textContent = `This week: ${fmtHrsMins(usedW)}`;
-    let color = '#dc2626';
-    if(usedW >= 1*3600000 && usedW < 2*3600000) color = 'var(--text)';
-    else if(usedW >= 2*3600000 && usedW < 3*3600000) color = '#16a34a';
-    else if(usedW >= 3*3600000) color = '#fbbf24';
-    wp.style.color = color;
-    wp.title = `Target: ${fmtHMM(WEEKLY_TARGET_MS)}`;
-  }
+  // Weekly timer removed from UI as requested
+  // const usedW = state.thisWeekMs || 0;
+  // const wp = byId('weekPill');
+  // if(wp){
+  //   wp.textContent = `This week: ${fmtHrsMins(usedW)}`;
+  //   let color = '#dc2626';
+  //   if(usedW >= 1*3600000 && usedW < 2*3600000) color = 'var(--text)';
+  //   else if(usedW >= 2*3600000 && usedW < 3*3600000) color = '#16a34a';
+  //   else if(usedW >= 3*3600000) color = '#fbbf24';
+  //   wp.style.color = color;
+  //   wp.title = `Target: ${fmtHMM(WEEKLY_TARGET_MS)}`;
+  // }
   
   // Legacy lockout (keep for compatibility)
   const locked = isLocked();
