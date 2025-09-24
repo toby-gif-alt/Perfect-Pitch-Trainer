@@ -306,7 +306,6 @@
     <h1 id="greeting">Absolute Pitch Trainer</h1>
     <div class="row">
       <span class="pill" id="capInfo">Training not started</span>
-      <span class="pill" id="weekPill">This week: 0 hrs 0 mins</span>
       <span class="pill" id="lockoutPill" style="display:none">🔒 Locked</span>
     </div>
     <div class="row">
@@ -1139,7 +1138,7 @@ try{
       mode: 'single',             // 'single' | 'variety' - user-controlled; default 'single' on fresh install
       recommendFromDate: null,    // set on first training day = date + 14 days (YYYY-MM-DD)
       currentProportions: { chosen: 1.0, alt: 0.0 }, // single: {1,0}; variety: {0.8,0.2}
-      altPool: [AUDIO_TYPES.SINE, AUDIO_TYPES.GUITAR], // excludes chosen
+      altPool: [AUDIO_TYPES.PIANO, AUDIO_TYPES.SINE, AUDIO_TYPES.GUITAR], // includes all timbres
       rotationIndex: 0,           // advances daily; altOfDay = altPool[rotationIndex % altPool.length]
       perPcStats: {},             // [pc]: { [timbre]: { last40:[], acc:0..1, medianCents, sdCents } }
       rescue: {},                 // [pc]: { [timbre]: { active:boolean, untilBlock:number } }
@@ -1402,6 +1401,12 @@ if (!state.daily) {
   save();
 }
 
+// Initialize daily stats tracking system for persistent progress data
+if (!state.dailyStats) {
+  state.dailyStats = {}; // format: { 'YYYY-MM-DD': { overall: {n:0, ok:0}, pitches: { 'C': {n:0, ok:0}, ... } } }
+  save();
+}
+
 // Migration for timbre variety system
 if (!state.timbre) {
   state.timbre = {
@@ -1409,7 +1414,7 @@ if (!state.timbre) {
     mode: 'single',
     recommendFromDate: null,    // set on first training day = date + 14 days
     currentProportions: { chosen: 1.0, alt: 0.0 },
-    altPool: [AUDIO_TYPES.SINE, AUDIO_TYPES.GUITAR].filter(t => t !== (state.audioType || AUDIO_TYPES.PIANO)),
+    altPool: [AUDIO_TYPES.PIANO, AUDIO_TYPES.SINE, AUDIO_TYPES.GUITAR], // includes all timbres
     rotationIndex: 0,
     perPcStats: {},
     rescue: {},
@@ -1508,11 +1513,54 @@ if (!state.ui.recallPitch) {
 applyTheme(state.theme);
 
 // Data cleanup to prevent localStorage quota issues
+// Update daily stats for persistent tracking (addresses cleanup data loss issue)
+function updateDailyStats(trial) {
+  if (!trial || typeof trial.correct !== 'boolean') return;
+  
+  const today = getTodayDateString();
+  
+  // Initialize today's stats if needed
+  if (!state.dailyStats[today]) {
+    state.dailyStats[today] = {
+      overall: { n: 0, ok: 0 },
+      pitches: {}
+    };
+  }
+  
+  const todayStats = state.dailyStats[today];
+  
+  // Update overall stats
+  todayStats.overall.n++;
+  if (trial.correct) todayStats.overall.ok++;
+  
+  // Update per-pitch stats if we have pitch info
+  if (trial.pc) {
+    if (!todayStats.pitches[trial.pc]) {
+      todayStats.pitches[trial.pc] = { n: 0, ok: 0 };
+    }
+    todayStats.pitches[trial.pc].n++;
+    if (trial.correct) todayStats.pitches[trial.pc].ok++;
+  }
+}
+
 function cleanupStateData() {
   try {
-    // Limit trials array to last 500 entries (previously unlimited)
-    if (state.trials && state.trials.length > 500) {
-      state.trials = state.trials.slice(-500);
+    // Keep more trials for better 8-week tracking (increased from 500 to 2000)
+    // This allows ~28 trials per day for 8 weeks (28 * 7 * 8 = 1568)
+    if (state.trials && state.trials.length > 2000) {
+      state.trials = state.trials.slice(-2000);
+    }
+    
+    // Clean up old daily stats - keep only last 70 days (10 weeks for safety margin)
+    if (state.dailyStats) {
+      const seventyDaysAgo = Date.now() - (70 * 24 * 60 * 60 * 1000);
+      const cutoffDate = new Date(seventyDaysAgo).toISOString().split('T')[0];
+      
+      for (const dateKey of Object.keys(state.dailyStats)) {
+        if (dateKey < cutoffDate) {
+          delete state.dailyStats[dateKey];
+        }
+      }
     }
     
     // Limit sessions array to last 20 sessions
@@ -1658,12 +1706,13 @@ function updateTimbreMode() {
 }
 
 function updateAltPool() {
+  // Include all timbres in variety mode (addresses request to include all timbres)
   const allTypes = [AUDIO_TYPES.PIANO, AUDIO_TYPES.SINE, AUDIO_TYPES.GUITAR];
-  state.timbre.altPool = allTypes.filter(t => t !== state.timbre.chosen);
+  state.timbre.altPool = [...allTypes]; // Include all timbres, not just excluding chosen
   
-  // If empty pool, rebuild from all types excluding chosen
+  // Ensure we always have all three timbres available for variety
   if (state.timbre.altPool.length === 0) {
-    state.timbre.altPool = ['sine', 'piano', 'guitar'].filter(t => t !== state.timbre.chosen);
+    state.timbre.altPool = ['piano', 'sine', 'guitar'];
   }
 }
 
@@ -2888,17 +2937,18 @@ function updateCapsUI(){
   //   text('capInfo', `Left: ${fmtMMSS(left)}`);
   // }
   
-  const usedW = state.thisWeekMs || 0;
-  const wp = byId('weekPill');
-  if(wp){
-    wp.textContent = `This week: ${fmtHrsMins(usedW)}`;
-    let color = '#dc2626';
-    if(usedW >= 1*3600000 && usedW < 2*3600000) color = 'var(--text)';
-    else if(usedW >= 2*3600000 && usedW < 3*3600000) color = '#16a34a';
-    else if(usedW >= 3*3600000) color = '#fbbf24';
-    wp.style.color = color;
-    wp.title = `Target: ${fmtHMM(WEEKLY_TARGET_MS)}`;
-  }
+  // Weekly timer removed from UI as requested
+  // const usedW = state.thisWeekMs || 0;
+  // const wp = byId('weekPill');
+  // if(wp){
+  //   wp.textContent = `This week: ${fmtHrsMins(usedW)}`;
+  //   let color = '#dc2626';
+  //   if(usedW >= 1*3600000 && usedW < 2*3600000) color = 'var(--text)';
+  //   else if(usedW >= 2*3600000 && usedW < 3*3600000) color = '#16a34a';
+  //   else if(usedW >= 3*3600000) color = '#fbbf24';
+  //   wp.style.color = color;
+  //   wp.title = `Target: ${fmtHMM(WEEKLY_TARGET_MS)}`;
+  // }
   
   // Legacy lockout (keep for compatibility)
   const locked = isLocked();
@@ -6181,6 +6231,10 @@ function answerSpecial(userSaysTarget){
   if(!special) return;
   const correct = (userSaysTarget && !isOOBTrial) || (!userSaysTarget && isOOBTrial);
   state.trials.push({note:currentNote, pc:truePc, guess:userSaysTarget?'TARGET':'OTHER', correct, timeout:false, oob:isOOBTrial, set:setFromIndex(state.levelIndex), block:0, time:Date.now(), special:special.mode});
+  
+  // Update daily stats for special trials too
+  updateDailyStats({pc:truePc, correct, time:Date.now()});
+  
   save();
   if(special.withFeedback){
     feedback(correct, correct ? undefined : (isOOBTrial ? 'Incorrect — Out of Bounds' : `Incorrect — ${pcLabel(truePc)}`));
@@ -6743,6 +6797,9 @@ function finalizeGrade(args) {
   
   state.trials.push(t);
   state.grade.inProgress = false;
+
+  // Update daily aggregated stats for persistent tracking
+  updateDailyStats(t);
 
   // Update timbre statistics for variety mode
   if (cur.timbre && cur.truePc && !isOobTrial) { // Only track in-bounds trials
@@ -7726,6 +7783,8 @@ function eightWeekBins(pitch){
   const bins=[];
   for(let w=1; w<=8; w++){ const start=t0 - (w-1)*7*86400000; const end=start+7*86400000; bins.push({w,start,end,n:0,ok:0}); }
   const oldest=bins[7].start;
+  
+  // First, use trial data for recent days (more accurate)
   const trials=(state.trials||[]).filter(tr=>{
     const d=dateAtMidnight(tr.time);
     return d>=oldest && d<bins[0].end && (pitch==='OVERALL'|| tr.pc===pitch);
@@ -7737,17 +7796,60 @@ function eightWeekBins(pitch){
     const idx=Math.min(8,Math.max(1,w))-1;
     const b=bins[idx]; b.n++; if(tr.correct) b.ok++;
   }
+  
+  // Fill in missing data from daily stats for days not covered by trial data
+  if (state.dailyStats) {
+    for (let w = 1; w <= 8; w++) {
+      const bin = bins[w-1];
+      if (bin.n === 0) { // No trial data for this week, check daily stats
+        for (let d = 0; d < 7; d++) {
+          const dayTs = bin.start + d * 86400000;
+          const dayKey = new Date(dayTs).toISOString().split('T')[0];
+          const dayStats = state.dailyStats[dayKey];
+          if (dayStats) {
+            const stats = pitch === 'OVERALL' ? dayStats.overall : dayStats.pitches[pitch];
+            if (stats) {
+              bin.n += stats.n;
+              bin.ok += stats.ok;
+            }
+          }
+        }
+      }
+    }
+  }
+  
   return bins;
 }
 function thisWeekBins(pitch){
   const ws = weekStartTs();
   const bins=[];
   for(let i=0;i<7;i++){ bins.push({day:i+1,start:ws+i*86400000,end:ws+(i+1)*86400000,n:0,ok:0}); }
+  
+  // First, use trial data (more accurate for current session)
   const trials=(state.trials||[]).filter(tr=> tr.time>=ws && tr.time<ws+7*86400000 && (pitch==='OVERALL'|| tr.pc===pitch));
   for(const tr of trials){
     const day = Math.floor((dateAtMidnight(tr.time) - ws)/86400000);
     const b = bins[Math.max(0, Math.min(6, day))]; b.n++; if(tr.correct) b.ok++;
   }
+  
+  // Fill in missing data from daily stats for days not covered by trial data
+  if (state.dailyStats) {
+    for (let i = 0; i < 7; i++) {
+      const bin = bins[i];
+      if (bin.n === 0) { // No trial data for this day, check daily stats
+        const dayKey = new Date(bin.start).toISOString().split('T')[0];
+        const dayStats = state.dailyStats[dayKey];
+        if (dayStats) {
+          const stats = pitch === 'OVERALL' ? dayStats.overall : dayStats.pitches[pitch];
+          if (stats) {
+            bin.n = stats.n;
+            bin.ok = stats.ok;
+          }
+        }
+      }
+    }
+  }
+  
   return bins;
 }
 function drawLine(ctx, pts, color, xscale, yscale){ ctx.beginPath(); let started=false; for(const p of pts){ if(p.y===null) continue; const x=xscale(p.x), y=yscale(p.y); if(!started){ ctx.moveTo(x,y); started=true; } else ctx.lineTo(x,y); } if(!started) return; ctx.strokeStyle=color; ctx.lineWidth=2.5; ctx.stroke(); }
